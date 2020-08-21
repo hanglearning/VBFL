@@ -5,6 +5,7 @@ import argparse
 #from tqdm import tqdm
 import numpy as np
 import random
+import time
 import torch
 import torch.nn.functional as F
 from torch import optim
@@ -26,6 +27,7 @@ parser.add_argument('-max_ncomm', '--max_num_comm', type=int, default=1000, help
 parser.add_argument('-sp', '--save_path', type=str, default='./checkpoints', help='the saving path of checkpoints')
 parser.add_argument('-iid', '--IID', type=int, default=0, help='the way to allocate data to clients')
 parser.add_argument('-ns', '--network_stability', type=float, default=0.7, help='the odds a device is online')
+parser.add_argument('-gr', '--general_rewards', type=int, default=1, help='rewards for verification of one transaction, mining and so forth')
 parser.add_argument('-v', '--verbose', type=int, default=0, help='print verbose debug log')
 
 def register_in_the_network(registrant_idx, registrant, num_of_devices_in_network, check_online=False):
@@ -117,6 +119,7 @@ if __name__=="__main__":
             miner.clear_worker_association()
             miner.clear_broadcasted_transactions()
             miner.clear_unconfirmmed_transactions()
+            miner.reset_mined_block()
         # incase no device is online for this communication round
         no_device_online = False
         
@@ -154,7 +157,6 @@ if __name__=="__main__":
             continue
         
         # miners accept local updates and broadcast to other miners
-        block_generation_time
         for miner_iter in range(len(miners_this_round)):
             miner = miners_this_round[miner_iter]
             if miner.is_online():
@@ -188,14 +190,61 @@ if __name__=="__main__":
 
         # miners do self and cross-validation(only validating signature at this moment)
         # time spent included in the block_generation_time
+        block_generation_time_spent = {}
         for miner_iter in range(len(miners_this_round)):
             miner = miners_this_round[miner_iter]
-            candidate_block
+            candidate_block = Block(idx=self.blockchain.get_chain_length())
             if miner.is_online():
+                start_time = time.time()
                 # self verification
                 for unconfirmmed_transaction in miner.get_unconfirmmed_transactions():
                     if miner.verify_transaction_by_signature(unconfirmmed_transaction):
-                        
-                    
+                        unconfirmmed_transaction['verified_by'] = f"device_{miner.get_idx()}"
+                        # TODO any idea?
+                        unconfirmmed_transaction['rewards'] = args["general_rewards"]
+                        candidate_block.add_verified_transaction(unconfirmmed_transaction)
+                        miner.receive_rewards(args["general_rewards"])
+                # cross verification
+                for unconfirmmed_transaction in miner.get_broadcasted_transactions():
+                    if miner.verify_transaction_by_signature(unconfirmmed_transaction):
+                        unconfirmmed_transaction['verified_by'] = f"device_{miner.get_idx()}"
+                        # TODO any idea?
+                        unconfirmmed_transaction['rewards'] = args["general_rewards"]
+                        candidate_block.add_verified_transaction(unconfirmmed_transaction)
+                        miner.receive_rewards(args["general_rewards"]) 
+                # mine the block
+                if candidate_block.get_transactions():
+                    # get the last block and add previous hash
+                    last_block = miner.blockchain.get_last_block()
+                    if last_block is None:
+                        # mine the genesis block
+                        candidate_block.set_previous_hash(None)
+                    else:
+                        candidate_block.set_previous_hash(last_block.compute_hash(hash_previous_block=True))
+                    # mine the candidate block by PoW, inside which the block_hash is also set
+                    mined_block = miner.proof_of_work(candidate_block)
+                else:
+                    print("No transaction to mine for this block.")
+                    continue
+                # unfortunately may go offline
+                if miner.online_switcher():
+                    # record mining time
+                    block_generation_time_spent[miner] = (time.time - start_time)/(miner.get_computation_power)
+                    mined_block.set_mining_rewards(args["general_rewards"])
+                    miner.receive_rewards(args["general_rewards"])
+                    # sign the block
+                    miner.sign_block(mined_block)
+                    miner.set_mined_block(mined_block)
+
+        # select the winning miner and broadcast its mined block
+        winning_miner = min(block_generation_time_spent.keys(), key=(lambda miner: block_generation_time_spent[miner]))
+        block_to_broadcast = miner.get_mined_block()
+
+        
+        
+
+                
+            
+               
 
                 

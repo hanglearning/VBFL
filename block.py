@@ -1,14 +1,16 @@
 # reference - https://developer.ibm.com/technologies/blockchain/tutorials/develop-a-blockchain-application-from-scratch-in-python/
 
 class Block:
-    def __init__(self, idx, transactions=None, block_generation_time_used=None, previous_hash=None, nonce=0, block_hash=None):
+    def __init__(self, idx, transactions=None, previous_hash=None, nonce=0, block_hash=None, mined_by=None, signature=None, mining_rewards=None):
         self._idx = idx
         self._transactions = transactions or []
-        self._block_generation_time_used = block_generation_time_used
         self._previous_hash = previous_hash
         self._nonce = nonce
         # the hash of the current block, calculated by compute_hash
         self._block_hash = block_hash
+        self._mined_by = mined_by
+        self._signature = signature
+        self._mining_rewards = mining_rewards
 
     # compute_hash() also used to return value for block verification  
     def compute_hash(self, hash_previous_block=False):
@@ -17,6 +19,8 @@ class Block:
         else:
             block_content = copy.deepcopy(self.__dict__)
             block_content['_block_hash'] = None
+            block_content['_signature'] = None
+            block_content['_mining_rewards'] = None
         block_content = json.dumps(block_content, sort_keys=True)
         return sha256(block_content.encode()).hexdigest()
 
@@ -40,7 +44,7 @@ class Block:
         # get the updates from this block
         return self._transactions
     
-    # setters
+    ''' Miner Specific '''
     def set_previous_hash(self, hash_to_set):
         self._previous_hash = hash_to_set
 
@@ -48,13 +52,17 @@ class Block:
         # after verified in cross_verification()
         self._transactions.append(transaction)
 
-    def set_block_generation_time_used(self, gen_time):
-        self._block_generation_time_used = gen_time
-
-    ''' Miner Specific '''
     def set_nonce(self, nonce):
         # used if propagated block not verified
         self._nonce = nonce
 
     def get_current_nonce(self):
         return self._nonce
+
+    def add_signature(self, mined_by, signature):
+        # mined_by is also signed_by
+        self._mined_by = mined_by
+        self._signature = signature
+
+    def set_mining_rewards(self, mining_rewards):
+        self._mining_rewards = mining_rewards
