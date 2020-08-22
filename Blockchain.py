@@ -8,10 +8,10 @@ class Blockchain:
     def __init__(self):
         self.chain = []
 
-    def get_chain_length(self):
+    def return_chain_length(self):
         return len(self.chain)
 
-    def get_last_block(self):
+    def return_last_block(self):
         if len(self.chain) > 0:
             return self.chain[-1]
         else:

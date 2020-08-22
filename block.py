@@ -34,21 +34,21 @@ class Block:
     def nonce_increment(self):
         self._nonce += 1
 
-    # getters of the private attribute
-    def get_block_hash(self):
+    # returnters of the private attribute
+    def return_block_hash(self):
         return self._block_hash
     
-    def get_previous_hash(self):
+    def return_previous_hash(self):
         return self._previous_hash
 
-    def get_block_idx(self):
+    def return_block_idx(self):
         return self._idx
 
-    def get_transactions(self):
-        # get the updates from this block
+    def return_transactions(self):
+        # return the updates from this block
         return self._transactions
     
-    def get_pow_proof(self):
+    def return_pow_proof(self):
         return self._block_hash
 
     ''' Miner Specific '''
@@ -63,7 +63,7 @@ class Block:
         # used if propagated block not verified
         self._nonce = nonce
 
-    def get_current_nonce(self):
+    def return_current_nonce(self):
         return self._nonce
 
     def add_signature(self, mined_by, signature):

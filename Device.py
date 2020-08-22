@@ -48,7 +48,7 @@ class Device:
         # self.block_to_add = None
 
     ''' Common Methods '''
-    def get_idx(self):
+    def return_idx(self):
         return self.idx
 
     def generate_rsa_key(self):
@@ -72,7 +72,7 @@ class Device:
         else:
             self.peer_list.update(new_peers)
 
-    def get_peers(self):
+    def return_peers(self):
         return self.peer_list
     
     def remove_peers(self, peers_to_remove):
@@ -91,7 +91,7 @@ class Device:
         else:
             self.role = "v"
         
-    def get_role(self):
+    def return_role(self):
         return self.role
 
     def online_switcher(self):
@@ -109,7 +109,7 @@ class Device:
         original_peer_list = copy.deepcopy(self.peer_list)
         for peer in self.peer_list:
             if peer.is_online(original_peer_list):
-                self.add_peers(peer.get_peers())
+                self.add_peers(peer.return_peers())
             else:
                 self.remove_peers(peer)
         # remove itself from the peer_list if there is
@@ -117,21 +117,21 @@ class Device:
         # if peer_list ends up empty, randomly register with another device
         return False if not self.peer_list else True
 
-    def get_chain(self):
+    def return_chain(self):
         return self.blockchain
 
     def check_pow_proof(block_to_check):
         # remove its block hash(compute_hash() by default) to verify pow_proof as block hash was set after pow
-        pow_proof = block_to_check.get_pow_proof()
+        pow_proof = block_to_check.return_pow_proof()
         return pow_proof.startswith('0' * Blockchain.difficulty) and pow_proof == block_to_check.compute_hash()
 
     def check_chain_validity(self, chain_to_check):
-        chain_len = chain_to_check.get_chain_length()
+        chain_len = chain_to_check.return_chain_length()
         if chain_len == 0 or chain_len == 1:
             pass
         else:
             for block in chain_to_check[1:]:
-                if self.check_pow_proof(block, block.get_block_hash()) and block.get_previous_hash == chain_to_check[chain_to_check.index(block) - 1].compute_hash(hash_whole_block=True):
+                if self.check_pow_proof(block, block.return_block_hash()) and block.return_previous_hash == chain_to_check[chain_to_check.index(block) - 1].compute_hash(hash_whole_block=True):
                     pass
                 else:
                     return False
@@ -141,7 +141,7 @@ class Device:
         longest_chain = None
         for peer in self.peer_list:
             if peer.is_online():
-                if peer.get_chain().get_chain_length() > self.blockchain.get_chain_length():
+                if peer.return_chain().return_chain_length() > self.blockchain.return_chain_length():
                     if self.check_chain_validity(peer_chain):
                         # Longer valid chain found!
                         curr_chain_len = peer_chain_length
@@ -153,7 +153,7 @@ class Device:
     def receive_rewards(self, rewards):
         self.rewards += rewards
     
-    def get_computation_power(self):
+    def return_computation_power(self):
         return self.computation_power
 
     ''' Worker '''
@@ -174,14 +174,14 @@ class Device:
         print("Done")
         self.local_parameters = Net.state_dict()
 
-    def get_local_updates_and_signature(self):
+    def return_local_updates_and_signature(self):
         return {"local_updates_params": self.local_parameters, "signature": self.sign_updates()}
 
     def associate_with_miner(self):
         online_miners_in_peer_list = set()
         for peer in peer_list:
             if peer.is_online():
-                if peer.get_role == 'm':
+                if peer.return_role == 'm':
                     online_miners_in_peer_list.add(peer)
         if not online_miners_in_peer_list:
             return False
@@ -197,17 +197,23 @@ class Device:
     def receive_block_from_miner(self, received_block):
         self.received_block_from_miner = received_block
 
+    def toss_received_block(self):
+        self.received_block_from_miner = None
+
+    def return_received_block_from_miner(self):
+        return self.received_block_from_miner
+
     ''' miner '''
     def add_worker_to_association(self, worker_device):
         self.associated_worker_set.add(worker_device)
 
-    def get_associated_workers(self):
+    def return_associated_workers(self):
         return self.associated_worker_set
     
     def add_unconfirmmed_transaction(self, add_unconfirmmed_transaction):
         self.broadcasted_transactions.add(add_unconfirmmed_transaction)
 
-    def get_unconfirmmed_transactions(self):
+    def return_unconfirmmed_transactions(self):
         return self.unconfirmmed_transactions
 
     def accept_broadcasted_transactions(self, broadcasted_transactions):
@@ -216,10 +222,10 @@ class Device:
     def broadcast_updates(self):
         for peer in self.peer_list:
             if peer.is_online():
-                if peer.get_role == 'm':
+                if peer.return_role == 'm':
                     peer.accept_broadcasted_transactions(self.unconfirmmed_transactions)
 
-    def get_broadcasted_transactions(self):
+    def return_broadcasted_transactions(self):
         return self.broadcasted_transactions
 
     def sign_block(self, mined_block):
@@ -250,7 +256,7 @@ class Device:
     def set_mined_block(self, mined_block):
         self.mined_block = mined_block
 
-    def get_mined_block(self):
+    def return_mined_block(self):
         return self.mined_block
 
     def receive_propagated_block(self, received_propagated_block):
@@ -258,16 +264,19 @@ class Device:
     
     def return_propagated_block(self):
         return self.received_propagated_block
+        
+    def toss_propagated_block(self):
+        self.received_propagated_block = None
 
     def verify_and_add_block(self, block_to_add):
         # check if the proof is valid(verify _block_hash).
         if not self.check_pow_proof(block_to_add):
             return False
-        last_block = self.blockchain.get_last_block()
+        last_block = self.blockchain.return_last_block()
         if last_block is not None:
         # check if the previous_hash referred in the block and the hash of latest block in the chain match.
         last_block_hash = last_block.compute_hash(hash_whole_block=True)
-        if block_to_add.get_previous_hash() != last_block_hash:
+        if block_to_add.return_previous_hash() != last_block_hash:
             return False
         # All verifications done.
         # ???When syncing by calling consensus(), rebuilt block doesn't have this field. add the block hash after verifying
@@ -279,7 +288,7 @@ class Device:
     # def set_block_to_add(self, block_to_add):
     #     self.block_to_add = block_to_add
 
-    # def get_block_to_add(self):
+    # def return_block_to_add(self):
     #     return self.block_to_add
     
     def miner_reset_vars_for_new_round(self):
