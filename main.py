@@ -116,10 +116,12 @@ if __name__=="__main__":
 
         # re-init round vars
         for miner in miners_this_round:
-            miner.clear_worker_association()
-            miner.clear_broadcasted_transactions()
-            miner.clear_unconfirmmed_transactions()
-            miner.reset_mined_block()
+            if miner.is_online():
+                miner.miner_reset_vars_for_new_round()
+        for worker in workers_this_round:
+            if worker.is_online():
+                worker.worker_reset_vars_for_new_round()
+
         # incase no device is online for this communication round
         no_device_online = False
         
@@ -220,7 +222,7 @@ if __name__=="__main__":
                         # mine the genesis block
                         candidate_block.set_previous_hash(None)
                     else:
-                        candidate_block.set_previous_hash(last_block.compute_hash(hash_previous_block=True))
+                        candidate_block.set_previous_hash(last_block.compute_hash(hash_whole_block=True))
                     # mine the candidate block by PoW, inside which the block_hash is also set
                     mined_block = miner.proof_of_work(candidate_block)
                 else:
@@ -229,7 +231,7 @@ if __name__=="__main__":
                 # unfortunately may go offline
                 if miner.online_switcher():
                     # record mining time
-                    block_generation_time_spent[miner] = (time.time - start_time)/(miner.get_computation_power)
+                    block_generation_time_spent[miner] = (time.time() - start_time)/(miner.get_computation_power())
                     mined_block.set_mining_rewards(args["general_rewards"])
                     miner.receive_rewards(args["general_rewards"])
                     # sign the block
@@ -238,9 +240,39 @@ if __name__=="__main__":
 
         # select the winning miner and broadcast its mined block
         winning_miner = min(block_generation_time_spent.keys(), key=(lambda miner: block_generation_time_spent[miner]))
-        block_to_broadcast = miner.get_mined_block()
+        block_to_propagate = miner.get_mined_block()
 
-        
+        # miner propogate the winning block (just let other miners receive it, verify it)
+        for miner_iter in range(len(miners_this_round)):
+            miner = miners_this_round[miner_iter]
+            if miner.is_online():
+                # miner.set_block_to_add(block_to_propagate)
+                miner.receive_propagated_block(block_to_propagate)
+                if miner.verify_and_add_block(miner.return_propagated_block()):
+                    pass
+                    # for worker in miner.get_associated_workers():
+                    #     if worker.online():
+                    #         worker.receive_block_from_miner(miner.get_block_to_add)
+                else:
+                    miner.toss_propagated_block()
+                    print("Received propagated block is invalid. In real implementation, the miners may continue to mine the block. In here, we just simply pass to the next miner. We can assume at least one miner will receive a valid block in this analysis model.")
+
+        # TODO
+        '''
+        miner
+        1. broadcast block
+        2. verify and add block
+        3. average gradients
+        4. request workers to download
+        worker
+        1. download and update to global model
+        2. exe smart contract - use its own data to calculate accuracy
+        3. send accuracy to validator
+        validator
+        1. calculate belief degree
+        2. record interaction frequency
+        3. calculate final trustworthiness of the worker
+        '''
         
 
                 

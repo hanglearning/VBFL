@@ -12,9 +12,13 @@ class Block:
         self._signature = signature
         self._mining_rewards = mining_rewards
 
-    # compute_hash() also used to return value for block verification  
-    def compute_hash(self, hash_previous_block=False):
-        if hash_previous_block:
+    # compute_hash() also used to return value for block verification
+    # if False by default, used for pow and verification, in which block_hash has to be None, because at this moment -
+    # pow - block hash is None, so does not affect much
+    # verification - the block already has its hash
+    # if hash_whole_block == True -> used in set_previous_hash, where we need to hash the whole previous block
+    def compute_hash(self, hash_whole_block=False):
+        if hash_whole_block:
             block_content = self.__dict__
         else:
             block_content = copy.deepcopy(self.__dict__)
@@ -44,6 +48,9 @@ class Block:
         # get the updates from this block
         return self._transactions
     
+    def get_pow_proof(self):
+        return self._block_hash
+
     ''' Miner Specific '''
     def set_previous_hash(self, hash_to_set):
         self._previous_hash = hash_to_set

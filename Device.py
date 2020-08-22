@@ -37,11 +37,15 @@ class Device:
         self.private_key = None
         self.public_key = None
         self.generate_rsa_key()
+        ''' For workers '''
+        self.received_block_from_miner = None
         ''' For miners '''
         self.associated_worker_set = set()
         self.unconfirmmed_transactions = set()
         self.broadcasted_transactions = set()
         self.mined_block = None
+        self.received_propagated_block = None
+        # self.block_to_add = None
 
     ''' Common Methods '''
     def get_idx(self):
@@ -116,7 +120,9 @@ class Device:
     def get_chain(self):
         return self.blockchain
 
-    def check_pow_proof(block_to_check, pow_proof):
+    def check_pow_proof(block_to_check):
+        # remove its block hash(compute_hash() by default) to verify pow_proof as block hash was set after pow
+        pow_proof = block_to_check.get_pow_proof()
         return pow_proof.startswith('0' * Blockchain.difficulty) and pow_proof == block_to_check.compute_hash()
 
     def check_chain_validity(self, chain_to_check):
@@ -125,7 +131,7 @@ class Device:
             pass
         else:
             for block in chain_to_check[1:]:
-                if self.check_pow_proof(block, block.get_block_hash()) and block.get_previous_hash == chain_to_check[chain_to_check.index(block) - 1].compute_hash(hash_previous_block=True):
+                if self.check_pow_proof(block, block.get_block_hash()) and block.get_previous_hash == chain_to_check[chain_to_check.index(block) - 1].compute_hash(hash_whole_block=True):
                     pass
                 else:
                     return False
@@ -185,24 +191,18 @@ class Device:
     def sign_updates(self):
         return {"pub_key": self.public_key, "modulus": self.modulus, "signature": self.sign_msg(self.local_parameters.__dict__)}
 
-    # def local_val(self):
-    #     pass
+    def worker_reset_vars_for_new_round(self):
+        self.received_block_from_miner = None
+
+    def receive_block_from_miner(self, received_block):
+        self.received_block_from_miner = received_block
 
     ''' miner '''
     def add_worker_to_association(self, worker_device):
         self.associated_worker_set.add(worker_device)
 
-    def clear_worker_association(self):
-        self.associated_worker_set.clear()
-
     def get_associated_workers(self):
         return self.associated_worker_set
-
-    def clear_unconfirmmed_transactions(self):
-        self.unconfirmmed_transactions.clear()
-
-    def clear_broadcasted_transactions(self):
-        self.broadcasted_transactions.clear()
     
     def add_unconfirmmed_transaction(self, add_unconfirmmed_transaction):
         self.broadcasted_transactions.add(add_unconfirmmed_transaction)
@@ -250,11 +250,46 @@ class Device:
     def set_mined_block(self, mined_block):
         self.mined_block = mined_block
 
-    def reset_mined_block(self):
-        self.mined_block = None
-
     def get_mined_block(self):
         return self.mined_block
+
+    def receive_propagated_block(self, received_propagated_block):
+        self.received_propagated_block = received_propagated_block
+    
+    def return_propagated_block(self):
+        return self.received_propagated_block
+
+    def verify_and_add_block(self, block_to_add):
+        # check if the proof is valid(verify _block_hash).
+        if not self.check_pow_proof(block_to_add):
+            return False
+        last_block = self.blockchain.get_last_block()
+        if last_block is not None:
+        # check if the previous_hash referred in the block and the hash of latest block in the chain match.
+        last_block_hash = last_block.compute_hash(hash_whole_block=True)
+        if block_to_add.get_previous_hash() != last_block_hash:
+            return False
+        # All verifications done.
+        # ???When syncing by calling consensus(), rebuilt block doesn't have this field. add the block hash after verifying
+			# block_to_add.set_hash()
+        self.blockchain.append_block(block_to_add)
+        return True
+
+
+    # def set_block_to_add(self, block_to_add):
+    #     self.block_to_add = block_to_add
+
+    # def get_block_to_add(self):
+    #     return self.block_to_add
+    
+    def miner_reset_vars_for_new_round(self):
+        self.associated_worker_set.clear()
+        self.unconfirmmed_transactions.clear()
+        self.broadcasted_transactions.clear()
+        self.mined_block = None
+        self.received_propagated_block = None
+#        self.block_to_add = None
+
 
 class DevicesInNetwork(object):
     def __init__(self, data_set_name, is_iid, num_of_devices, network_stability, dev):
