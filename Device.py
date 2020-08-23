@@ -14,6 +14,7 @@ class Device:
     def __init__(self, idx, assigned_ds, network_stability, dev):
         self.idx = idx
         self.train_ds = assigned_ds
+        self.network_stability = network_stability
         self.dev = dev
         self.train_dl = None
         self.local_parameters = None
@@ -30,7 +31,6 @@ class Device:
         # used in cross_verification and in the PoS
         self.on_line = False
         self.rewards = 0
-        self.network_stability = 0
         self.blockchain = Blockchain()
         # init key pair
         self.modulus = None
@@ -52,7 +52,7 @@ class Device:
         return self.idx
 
     def generate_rsa_key(self):
-        keyPair = RSA.generate(bits=256)
+        keyPair = RSA.generate(bits=1024)
         self.modulus = keyPair.n
         self.private_key = keyPair.d
         self.public_key = keyPair.e
@@ -67,7 +67,7 @@ class Device:
         self.global_weights = global_weights
 
     def add_peers(self, new_peers):
-        if type(new_peers) == str:
+        if isinstance(new_peers, Device):
             self.peer_list.add(new_peers)
         else:
             self.peer_list.update(new_peers)
@@ -76,8 +76,8 @@ class Device:
         return self.peer_list
     
     def remove_peers(self, peers_to_remove):
-        if type(peers_to_remove) == str:
-            self.peer_list.remove(peers_to_remove)
+        if isinstance(peers_to_remove, Device):
+            self.peer_list.discard(peers_to_remove)
         else:
             self.peer_list.difference_update(peers_to_remove)
 
@@ -85,11 +85,11 @@ class Device:
         # equal probability
         role_choice = random.randint(0, 2)
         if role_choice == 0:
-            self.role = "w"
+            self.role = "worker"
         elif role_choice == 1:
-            self.role = "m"
+            self.role = "miner"
         else:
-            self.role = "v"
+            self.role = "validator"
         
     def return_role(self):
         return self.role
@@ -107,13 +107,13 @@ class Device:
     
     def update_peer_list(self):
         original_peer_list = copy.deepcopy(self.peer_list)
-        for peer in self.peer_list:
-            if peer.is_online(original_peer_list):
+        for peer in original_peer_list:
+            if peer.is_online():
                 self.add_peers(peer.return_peers())
             else:
                 self.remove_peers(peer)
         # remove itself from the peer_list if there is
-        self.remove_peers(f'device_{self.idx}')
+        self.remove_peers(self.idx)
         # if peer_list ends up empty, randomly register with another device
         return False if not self.peer_list else True
 
@@ -179,7 +179,7 @@ class Device:
 
     def associate_with_miner(self):
         online_miners_in_peer_list = set()
-        for peer in peer_list:
+        for peer in self.peer_list:
             if peer.is_online():
                 if peer.return_role == 'm':
                     online_miners_in_peer_list.add(peer)
@@ -231,7 +231,7 @@ class Device:
     def sign_block(self, mined_block):
         mined_block['signature'] = self.sign_msg(mined_block.__dict__)
 
-    def verify_transaction_by_signature(self, transaction_to_verify)
+    def verify_transaction_by_signature(self, transaction_to_verify):
         local_updates_params = transaction_to_verify['local_updates']["local_updates_params"]
         modulus = transaction_to_verify['local_updates']["signature"]["modulus"]
         pub_key = transaction_to_verify['local_updates']["signature"]["pub_key"]
@@ -274,10 +274,10 @@ class Device:
             return False
         last_block = self.blockchain.return_last_block()
         if last_block is not None:
-        # check if the previous_hash referred in the block and the hash of latest block in the chain match.
-        last_block_hash = last_block.compute_hash(hash_whole_block=True)
-        if block_to_add.return_previous_hash() != last_block_hash:
-            return False
+            # check if the previous_hash referred in the block and the hash of latest block in the chain match.
+            last_block_hash = last_block.compute_hash(hash_whole_block=True)
+            if block_to_add.return_previous_hash() != last_block_hash:
+                return False
         # All verifications done.
         # ???When syncing by calling consensus(), rebuilt block doesn't have this field. add the block hash after verifying
 			# block_to_add.set_hash()
@@ -301,10 +301,10 @@ class Device:
 
 
 class DevicesInNetwork(object):
-    def __init__(self, data_set_name, is_iid, num_of_devices, network_stability, dev):
+    def __init__(self, data_set_name, is_iid, num_devices, network_stability, dev):
         self.data_set_name = data_set_name
         self.is_iid = is_iid
-        self.num_of_devices = num_of_devices
+        self.num_devices = num_devices
         self.dev = dev
         self.devices_set = {}
         self.test_data_loader = None
@@ -324,9 +324,9 @@ class DevicesInNetwork(object):
         train_data = mnist_dataset.train_data
         train_label = mnist_dataset.train_label
         # shard dataset and distribute among devices
-        shard_size = mnist_dataset.train_data_size // self.num_of_devices // 2
+        shard_size = mnist_dataset.train_data_size // self.num_devices // 2
         shards_id = np.random.permutation(mnist_dataset.train_data_size // shard_size)
-        for i in range(self.num_of_devices):
+        for i in range(self.num_devices):
             # make it more random by introducing two shards
             shards_id1 = shards_id[i * 2]
             shards_id2 = shards_id[i * 2 + 1]
@@ -337,6 +337,7 @@ class DevicesInNetwork(object):
             local_data, local_label = np.vstack((data_shards1, data_shards2)), np.vstack((label_shards1, label_shards2))
             local_label = np.argmax(local_label, axis=1)
             # assign data to a device and put in the devices set
-            a_device = Device(i+1, TensorDataset(torch.tensor(local_data), torch.tensor(local_label)), self.default_network_stability, self.dev)
+            device_idx = f'device_{i+1}'
+            a_device = Device(device_idx, TensorDataset(torch.tensor(local_data), torch.tensor(local_label)), self.default_network_stability, self.dev)
             # device index starts from 1
-            self.devices_set[f'device_{i+1}'] = a_device
+            self.devices_set[device_idx] = a_device

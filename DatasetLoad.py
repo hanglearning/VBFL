@@ -5,7 +5,7 @@ import platform
 import pickle
 
 
-class DataSetLoad(object):
+class DatasetLoad(object):
     def __init__(self, dataSetName, isIID):
         self.name = dataSetName
         self.train_data = None
