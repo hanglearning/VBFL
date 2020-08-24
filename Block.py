@@ -1,4 +1,7 @@
 # reference - https://developer.ibm.com/technologies/blockchain/tutorials/develop-a-blockchain-application-from-scratch-in-python/
+import copy
+import json
+from hashlib import sha256
 
 class Block:
     def __init__(self, idx, transactions=None, previous_hash=None, nonce=0, block_hash=None, mined_by=None, signature=None, mining_rewards=None):
@@ -18,15 +21,13 @@ class Block:
     # verification - the block already has its hash
     # if hash_whole_block == True -> used in set_previous_hash, where we need to hash the whole previous block
     def compute_hash(self, hash_whole_block=False):
-        if hash_whole_block:
-            block_content = self.__dict__
-        else:
+        if not hash_whole_block:
             block_content = copy.deepcopy(self.__dict__)
             block_content['_block_hash'] = None
             block_content['_signature'] = None
             block_content['_mining_rewards'] = None
-        block_content = json.dumps(block_content, sort_keys=True)
-        return sha256(block_content.encode()).hexdigest()
+            block_content = self.__dict__
+        return sha256(str(block_content).encode('utf-8')).hexdigest()
 
     def set_hash(self):
         self._block_hash = self.compute_hash()

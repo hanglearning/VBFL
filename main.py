@@ -41,9 +41,9 @@ def check_network_eligibility(check_online=False):
     for miner in miners_this_round:
         if miner.is_online():
             num_online_miners += 1
-    for validator in validators_this_round:
-        if validator.is_online():
-            num_online_validators += 1
+    # for validator in validators_this_round:
+    #     if validator.is_online():
+    #         num_online_validators += 1
     ineligible = False
     if num_online_workers == 0:
         print('There is no workers online in this round, ', end='')
@@ -51,9 +51,9 @@ def check_network_eligibility(check_online=False):
     elif num_online_miners == 0:
         print('There is no miners online in this round, ', end='')
         ineligible = True
-    elif num_online_validators == 0:
-        print('There is no validators online in this round, ', end='')
-        ineligible = True
+    # elif num_online_validators == 0:
+    #     print('There is no validators online in this round, ', end='')
+    #     ineligible = True
     if ineligible:
         print('which is ineligible for the network to continue operating.')
         return False
@@ -74,7 +74,7 @@ def register_in_the_network(registrant, check_online=False):
                     online_registrars_idxes.add(registrar_idx)
             if not online_registrars_idxes:
                 return False
-            registrar_idx = random.sample(online_registrars_idx, 1)[0]
+            registrar_idx = random.sample(online_registrars_idxes, 1)[0]
             registrar = devices_in_network.devices_set[registrar_idx]
     # registrant add registrar to its peer list
     registrant.add_peers(registrar)
@@ -195,15 +195,15 @@ if __name__=="__main__":
                 # PoW resync chain
                 worker.pow_resync_chain()
                 # worker perform local update
-                print(f"This is {device.return_idx()} - worker {worker_iter+1}/{len(workers_this_round)} performing local updates...")
+                print(f"This is {worker.return_idx()} - worker {worker_iter+1}/{len(workers_this_round)} performing local updates...")
                 worker.worker_local_update(args['batchsize'], net, loss_func, opti, global_weights)
                 # worker associates with a miner
-                associated_miner_idx = worker.associate_with_miner()
-                if not associated_miner_idx:
-                    print("Cannot find a miner in its peer list.")
+                associated_miner = worker.associate_with_miner()
+                if not associated_miner:
+                    print(f"Cannot find a miner in {worker.return_idx()} peer list.")
                     continue
-                associated_miner = devices_in_network.devices_set[associated_miner_idx]
                 if associated_miner.is_online():
+                    # but I have made sure it is online in associate_with_miner() to ease the programming at this moment
                     associated_miner.add_worker_to_association(worker)
                 else:
                     worker.remove_peers(associated_miner_idx)
@@ -215,7 +215,8 @@ if __name__=="__main__":
             continue
         
         # miners accept local updates and broadcast to other miners
-        for miner in miners_this_round:
+        for miner_iter in range(len(miners_this_round)):
+            miner = miners_this_round[miner_iter]
             if miner.is_online():
                 # update peer list
                 if not miner.update_peer_list():
@@ -227,7 +228,7 @@ if __name__=="__main__":
                 # PoW resync chain
                 miner.pow_resync_chain()
                 # miner accepts local updates from its workers association
-                print(f"This is {miner.return_idx()} - miner {miner_iter+1}/{len(workers_this_round)} accepting workers' updates...")
+                print(f"This is {miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} accepting workers' updates...")
                 potential_offline_workers = set()
                 associated_workers = miner.return_associated_workers()
                 if not associated_workers:
@@ -235,7 +236,7 @@ if __name__=="__main__":
                     continue
                 for worker in miner.return_associated_workers():
                     if worker.is_online():
-                        miner.add_unconfirmmed_transaction({'worker_device_id': worker.return_idx(), 'local_updates': worker.return_local_updates()})
+                        miner.add_unconfirmmed_transaction({'worker_device_id': worker.return_idx(), 'local_updates': worker.return_local_updates_and_signature()})
                     else:
                         potential_offline_workers.add(worker)
                 miner.remove_peers(potential_offline_workers)
@@ -256,7 +257,8 @@ if __name__=="__main__":
         # time spent included in the block_generation_time
         block_generation_time_spent = {}
         for miner in miners_this_round:
-            candidate_block = Block(idx=miner.blockchain.return_chain_length())
+            # block index starts from 1
+            candidate_block = Block(idx=miner.blockchain.return_chain_length()+1)
             if miner.is_online():
                 start_time = time.time()
                 # self verification
@@ -268,13 +270,14 @@ if __name__=="__main__":
                         candidate_block.add_verified_transaction(unconfirmmed_transaction)
                         miner.receive_rewards(args["general_rewards"])
                 # cross verification
-                for unconfirmmed_transaction in miner.return_broadcasted_transactions():
-                    if miner.verify_transaction_by_signature(unconfirmmed_transaction):
-                        unconfirmmed_transaction['verified_by'] = miner.return_idx()
-                        # TODO any idea?
-                        unconfirmmed_transaction['rewards'] = args["general_rewards"]
-                        candidate_block.add_verified_transaction(unconfirmmed_transaction)
-                        miner.receive_rewards(args["general_rewards"]) 
+                for unconfirmmed_transactions in miner.return_accepted_broadcasted_transactions():
+                    for unconfirmmed_transaction in unconfirmmed_transactions:
+                        if miner.verify_transaction_by_signature(unconfirmmed_transaction):
+                            unconfirmmed_transaction['verified_by'] = miner.return_idx()
+                            # TODO any idea?
+                            unconfirmmed_transaction['rewards'] = args["general_rewards"]
+                            candidate_block.add_verified_transaction(unconfirmmed_transaction)
+                            miner.receive_rewards(args["general_rewards"]) 
                 # mine the block
                 if candidate_block.return_transactions():
                     # return the last block and add previous hash
@@ -303,8 +306,12 @@ if __name__=="__main__":
             print("Go to the next round.\n")
             continue
         # select the winning miner and broadcast its mined block
-        winning_miner = min(block_generation_time_spent.keys(), key=(lambda miner: block_generation_time_spent[miner]))
-        block_to_propagate = miner.return_mined_block()
+        try:
+            winning_miner = min(block_generation_time_spent.keys(), key=(lambda miner: block_generation_time_spent[miner]))
+        except:
+            print("No block is generated in this round. Skip to the next round.")
+            continue
+        block_to_propagate = winning_miner.return_mined_block()
 
         # miner propogate the winning block (just let other miners receive it, verify it and add to the blockchain)
         for miner in miners_this_round:

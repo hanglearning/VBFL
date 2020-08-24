@@ -7,7 +7,7 @@ import random
 import copy
 # https://cryptobook.nakov.com/digital-signatures/rsa-sign-verify-examples
 from Crypto.PublicKey import RSA
-from hashlib import sha512
+from hashlib import sha256
 from Blockchain import Blockchain
 
 class Device:
@@ -41,8 +41,9 @@ class Device:
         self.received_block_from_miner = None
         ''' For miners '''
         self.associated_worker_set = set()
-        self.unconfirmmed_transactions = set()
-        self.broadcasted_transactions = set()
+        # dict cannot be added to set()
+        self.unconfirmmed_transactions = None or []
+        self.broadcasted_transactions = None or []
         self.mined_block = None
         self.received_propagated_block = None
         # self.block_to_add = None
@@ -58,10 +59,10 @@ class Device:
         self.public_key = keyPair.e
     
     def sign_msg(self, msg):
-        hash = int.from_bytes(sha512(msg).digest(), byteorder='big')
+        hash = int.from_bytes(sha256(str(msg).encode('utf-8')).digest(), byteorder='big')
         # pow() is python built-in modular exponentiation function
         signature = pow(hash, self.private_key, self.modulus)
-        return hex(signature)
+        return signature
 
     def init_global_weights(self, global_weights):
         self.global_weights = global_weights
@@ -83,7 +84,8 @@ class Device:
 
     def assign_role(self):
         # equal probability
-        role_choice = random.randint(0, 2)
+        # TODO give validator back later
+        role_choice = random.randint(0, 1)
         if role_choice == 0:
             self.role = "worker"
         elif role_choice == 1:
@@ -106,14 +108,20 @@ class Device:
         return self.on_line
     
     def update_peer_list(self):
-        original_peer_list = copy.deepcopy(self.peer_list)
-        for peer in original_peer_list:
+        online_peers = set()
+        offline_peers = set()
+        for peer in self.peer_list:
             if peer.is_online():
-                self.add_peers(peer.return_peers())
+                online_peers.add(peer)
             else:
-                self.remove_peers(peer)
+                offline_peers.add(peer)
+        # for online peers, suck in their peer list
+        for online_peer in online_peers:
+            self.add_peers(online_peer.return_peers())
+        # remove offline peers
+        self.remove_peers(offline_peers)
         # remove itself from the peer_list if there is
-        self.remove_peers(self.idx)
+        self.remove_peers(self)
         # if peer_list ends up empty, randomly register with another device
         return False if not self.peer_list else True
 
@@ -159,7 +167,7 @@ class Device:
     ''' Worker '''
     # TODO change to computation power
     def worker_local_update(self, localBatchSize, Net, lossFun, opti, global_parameters):
-        print(f"computation power {self.computation_power}, performing {self.computation_power} epochs")
+        print(f"computation power {self.computation_power}, performing {self.computation_power} epoch(s)")
         Net.load_state_dict(global_parameters, strict=True)
         self.train_dl = DataLoader(self.train_ds, batch_size=localBatchSize, shuffle=True)
         for epoch in range(self.computation_power):
@@ -181,7 +189,7 @@ class Device:
         online_miners_in_peer_list = set()
         for peer in self.peer_list:
             if peer.is_online():
-                if peer.return_role == 'm':
+                if peer.return_role() == 'miner':
                     online_miners_in_peer_list.add(peer)
         if not online_miners_in_peer_list:
             return False
@@ -189,7 +197,7 @@ class Device:
         return self.worker_associated_miner
 
     def sign_updates(self):
-        return {"pub_key": self.public_key, "modulus": self.modulus, "signature": self.sign_msg(self.local_parameters.__dict__)}
+        return {"pub_key": self.public_key, "modulus": self.modulus, "signature": self.sign_msg(self.local_parameters)}
 
     def worker_reset_vars_for_new_round(self):
         self.received_block_from_miner = None
@@ -210,26 +218,26 @@ class Device:
     def return_associated_workers(self):
         return self.associated_worker_set
     
-    def add_unconfirmmed_transaction(self, add_unconfirmmed_transaction):
-        self.broadcasted_transactions.add(add_unconfirmmed_transaction)
+    def add_unconfirmmed_transaction(self, unconfirmmed_transaction):
+        self.unconfirmmed_transactions.append(unconfirmmed_transaction)
 
     def return_unconfirmmed_transactions(self):
         return self.unconfirmmed_transactions
 
     def accept_broadcasted_transactions(self, broadcasted_transactions):
-        self.broadcasted_transactions.add(broadcasted_transactions)
+        self.broadcasted_transactions.append(broadcasted_transactions)
 
     def broadcast_updates(self):
         for peer in self.peer_list:
             if peer.is_online():
-                if peer.return_role == 'm':
+                if peer.return_role() == 'miner':
                     peer.accept_broadcasted_transactions(self.unconfirmmed_transactions)
 
-    def return_broadcasted_transactions(self):
+    def return_accepted_broadcasted_transactions(self):
         return self.broadcasted_transactions
 
     def sign_block(self, mined_block):
-        mined_block['signature'] = self.sign_msg(mined_block.__dict__)
+        mined_block.add_signature(self.return_idx(), self.sign_msg(mined_block.__dict__))
 
     def verify_transaction_by_signature(self, transaction_to_verify):
         local_updates_params = transaction_to_verify['local_updates']["local_updates_params"]
@@ -237,7 +245,7 @@ class Device:
         pub_key = transaction_to_verify['local_updates']["signature"]["pub_key"]
         signature = transaction_to_verify['local_updates']["signature"]["signature"]
         # verify
-        hash = int.from_bytes(sha512(local_updates_params.__dict__).digest(), byteorder='big')
+        hash = int.from_bytes(sha256(str(local_updates_params).encode('utf-8')).digest(), byteorder='big')
         hashFromSignature = pow(signature, pub_key, modulus)
         return hash == hashFromSignature
     
