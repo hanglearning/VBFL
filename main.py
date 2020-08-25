@@ -190,7 +190,6 @@ if __name__=="__main__":
                     # peer_list_empty, randomly register with an online node
                     if not register_in_the_network(worker, check_online=True):
                         print("No devices found in the network online in this communication round.")
-                        go_to_next_round = True
                         break
                 # PoW resync chain
                 worker.pow_resync_chain()
@@ -223,7 +222,6 @@ if __name__=="__main__":
                     # peer_list_empty, randomly register with a online node
                     if not register_in_the_network(worker, check_online=True):
                         print("No devices found in the network online in this communication round.")
-                        go_to_next_round = True
                         break
                 # PoW resync chain
                 miner.pow_resync_chain()
@@ -264,7 +262,7 @@ if __name__=="__main__":
                 # self verification
                 for unconfirmmed_transaction in miner.return_unconfirmmed_transactions():
                     if miner.verify_transaction_by_signature(unconfirmmed_transaction):
-                        unconfirmmed_transaction['verified_by'] = miner.return_idx()
+                        unconfirmmed_transaction['tx_verified_by'] = miner.return_idx()
                         # TODO any idea?
                         unconfirmmed_transaction['rewards'] = args["general_rewards"]
                         candidate_block.add_verified_transaction(unconfirmmed_transaction)
@@ -273,7 +271,7 @@ if __name__=="__main__":
                 for unconfirmmed_transactions in miner.return_accepted_broadcasted_transactions():
                     for unconfirmmed_transaction in unconfirmmed_transactions:
                         if miner.verify_transaction_by_signature(unconfirmmed_transaction):
-                            unconfirmmed_transaction['verified_by'] = miner.return_idx()
+                            unconfirmmed_transaction['tx_verified_by'] = miner.return_idx()
                             # TODO any idea?
                             unconfirmmed_transaction['rewards'] = args["general_rewards"]
                             candidate_block.add_verified_transaction(unconfirmmed_transaction)
@@ -315,6 +313,7 @@ if __name__=="__main__":
             print("No block is generated in this round. Skip to the next round.")
             continue
         block_to_propagate = winning_miner.return_mined_block()
+        print(f"Winning miner {winning_miner.return_idx()} will propagate its block.")
 
         # miner propogate the winning block (just let other miners receive it, verify it and add to the blockchain)
         for miner in miners_this_round:
@@ -325,7 +324,7 @@ if __name__=="__main__":
                     pass
                 else:
                     miner.toss_propagated_block()
-                    print("Received propagated block is invalid. In real implementation, the miners may continue to mine the block. In here, we just simply pass to the next miner. We can assume at least one miner will receive a valid block in this analysis model.")
+                    print("Received propagated block is either invalid or does not fit this chain. In real implementation, the miners may continue to mine the block. In here, we just simply pass to the next miner. We can assume at least one miner will receive a valid block in this analysis model.")
                 # may go offline
                 miner.online_switcher()
         

@@ -26,8 +26,6 @@ class Block:
             block_content['_block_hash'] = None
             block_content['_signature'] = None
             block_content['_mining_rewards'] = None
-        # del block_content['_transactions']
-        # print(str(sorted(block_content.items())).encode('utf-8'))
         # need sort keys to preserve order of key value pairs
         return sha256(str(sorted(block_content.items())).encode('utf-8')).hexdigest()
 

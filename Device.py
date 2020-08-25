@@ -137,10 +137,6 @@ class Device:
     def check_pow_proof(self, block_to_check):
         # remove its block hash(compute_hash() by default) to verify pow_proof as block hash was set after pow
         pow_proof = block_to_check.return_pow_proof()
-        tocheck = block_to_check.compute_hash()
-        if pow_proof != tocheck:
-            print("pow_proof", pow_proof)
-            print("tocheck", tocheck)
         return pow_proof.startswith('0' * Blockchain.pow_difficulty) and pow_proof == block_to_check.compute_hash()
 
     def check_chain_validity(self, chain_to_check):
@@ -216,7 +212,7 @@ class Device:
         self.received_block_from_miner = None
 
     def receive_block_from_miner(self, received_block):
-        self.received_block_from_miner = received_block
+        self.received_block_from_miner = copy.deepcopy(received_block)
 
     def toss_received_block(self):
         self.received_block_from_miner = None
@@ -250,13 +246,13 @@ class Device:
         return self.associated_worker_set
     
     def add_unconfirmmed_transaction(self, unconfirmmed_transaction):
-        self.unconfirmmed_transactions.append(unconfirmmed_transaction)
+        self.unconfirmmed_transactions.append(copy.deepcopy(unconfirmmed_transaction))
 
     def return_unconfirmmed_transactions(self):
         return self.unconfirmmed_transactions
 
     def accept_broadcasted_transactions(self, broadcasted_transactions):
-        self.broadcasted_transactions.append(broadcasted_transactions)
+        self.broadcasted_transactions.append(copy.deepcopy(broadcasted_transactions))
 
     def broadcast_updates(self):
         for peer in self.peer_list:
@@ -300,7 +296,7 @@ class Device:
         return self.mined_block
 
     def receive_propagated_block(self, received_propagated_block):
-        self.received_propagated_block = received_propagated_block
+        self.received_propagated_block = copy.deepcopy(received_propagated_block)
     
     def return_propagated_block(self):
         return self.received_propagated_block
@@ -317,6 +313,12 @@ class Device:
             # check if the previous_hash referred in the block and the hash of latest block in the chain match.
             last_block_hash = last_block.compute_hash(hash_whole_block=True)
             if block_to_add.return_previous_hash() != last_block_hash:
+                # debug
+                # print("last_block")
+                # print(str(sorted(last_block.__dict__.items())).encode('utf-8'))
+                # print("block_to_add")
+                # print(str(sorted(block_to_add.__dict__.items())).encode('utf-8'))
+                #debug
                 return False
         # All verifications done.
         # ???When syncing by calling consensus(), rebuilt block doesn't have this field. add the block hash after verifying
