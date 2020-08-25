@@ -321,7 +321,7 @@ if __name__=="__main__":
             if miner.is_online():
                 # miner.set_block_to_add(block_to_propagate)
                 miner.receive_propagated_block(block_to_propagate)
-                if miner.verify_and_add_block(miner.return_propagated_block(), pause=True):
+                if miner.verify_and_add_block(miner.return_propagated_block()):
                     pass
                 else:
                     miner.toss_propagated_block()
@@ -364,7 +364,7 @@ if __name__=="__main__":
                                 sum_parameters[var] += local_updates_params[var]
                     worker.global_update(len(transactions), sum_parameters)
                     accuracy = worker.evaluate_updated_weights()
-                    print(f'Worker {worker.return_idx()} at the communication round {comm_round} with chain length {worker.return_chain().return_chain_length()} has accuracy: {accuracy}')
+                    print(f'Worker {worker.return_idx()} at the communication round {comm_round+1} with chain length {worker.return_chain().return_chain_length()} has accuracy: {accuracy}')
                 
 
         # TODO

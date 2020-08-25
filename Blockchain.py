@@ -8,6 +8,9 @@ class Blockchain:
     def __init__(self):
         self.chain = []
 
+    def return_chain_structure(self):
+        return self.chain
+
     def return_chain_length(self):
         if type(self.chain) != list:
             print()
