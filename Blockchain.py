@@ -1,4 +1,5 @@
 from Block import Block
+import copy
 
 class Blockchain:
 
@@ -13,7 +14,7 @@ class Blockchain:
 
     def return_chain_length(self):
         if type(self.chain) != list:
-            print()
+            print('not list and weird')
         return len(self.chain)
 
     def return_last_block(self):

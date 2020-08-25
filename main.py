@@ -363,7 +363,7 @@ if __name__=="__main__":
                                 sum_parameters[var] += local_updates_params[var]
                     worker.global_update(len(transactions), sum_parameters)
                     accuracy = worker.evaluate_updated_weights()
-                    print(f'Worker {worker.return_idx()} at the communication round {comm_round+1} with chain length {worker.return_chain().return_chain_length()} has accuracy: {accuracy}')
+                    print(f'Worker {worker.return_idx()} at the communication round {comm_round+1} with chain length {worker.return_blockchain_object().return_chain_length()} has accuracy: {accuracy}')
                 
 
         # TODO

@@ -131,7 +131,7 @@ class Device:
         # if peer_list ends up empty, randomly register with another device
         return False if not self.peer_list else True
 
-    def return_chain(self):
+    def return_blockchain_object(self):
         return self.blockchain
 
     def check_pow_proof(self, block_to_check):
@@ -156,15 +156,15 @@ class Device:
         longest_chain = None
         for peer in self.peer_list:
             if peer.is_online():
-                peer_chain = peer.return_chain()
-                curr_chain_len = self.return_chain().return_chain_length()
+                peer_chain = peer.return_blockchain_object()
+                curr_chain_len = self.return_blockchain_object().return_chain_length()
                 if peer_chain.return_chain_length() > curr_chain_len:
                     if self.check_chain_validity(peer_chain):
                         # Longer valid chain found!
                         curr_chain_len = peer_chain.return_chain_length()
                         longest_chain = peer_chain
         if longest_chain:
-            self.blockchain.replace_chain(longest_chain)
+            self.blockchain.replace_chain(longest_chain.return_chain_structure())
             print(f"{self.return_idx()} chain resynced")
 
     def receive_rewards(self, rewards):
