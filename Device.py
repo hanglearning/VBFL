@@ -11,14 +11,20 @@ from hashlib import sha256
 from Blockchain import Blockchain
 
 class Device:
-    def __init__(self, idx, assigned_ds, network_stability, dev):
+    def __init__(self, idx, assigned_train_ds, assigned_test_ds, local_batch_size, loss_func, opti, network_stability, net, dev):
         self.idx = idx
-        self.train_ds = assigned_ds
+        self.train_ds = assigned_train_ds
+        self.test_ds = assigned_test_ds
+        self.local_batch_size = local_batch_size
+        self.loss_func = loss_func
+        self.opti = opti
         self.network_stability = network_stability
+        self.net = net
         self.dev = dev
         self.train_dl = None
-        self.local_parameters = None
-        self.global_weights = None
+        self.test_dl = None
+        self.local_train_parameters = None
+        self.global_parameters = None
         # used to assign role to the device
         self.role = None
         ''' simulating hardware equipment strength, such as good processors and RAM capacity
@@ -64,8 +70,8 @@ class Device:
         signature = pow(hash, self.private_key, self.modulus)
         return signature
 
-    def init_global_weights(self, global_weights):
-        self.global_weights = global_weights
+    def init_global_parameters(self):
+        self.global_parameters = self.net.state_dict()
 
     def add_peers(self, new_peers):
         if isinstance(new_peers, Device):
@@ -128,10 +134,13 @@ class Device:
     def return_chain(self):
         return self.blockchain
 
-    def check_pow_proof(block_to_check):
+    def check_pow_proof(self, block_to_check):
         # remove its block hash(compute_hash() by default) to verify pow_proof as block hash was set after pow
         pow_proof = block_to_check.return_pow_proof()
-        return pow_proof.startswith('0' * Blockchain.difficulty) and pow_proof == block_to_check.compute_hash()
+        tocheck = block_to_check.compute_hash()
+        if pow_proof != tocheck:
+            print()
+        return pow_proof.startswith('0' * Blockchain.pow_difficulty) and pow_proof == block_to_check.compute_hash()
 
     def check_chain_validity(self, chain_to_check):
         chain_len = chain_to_check.return_chain_length()
@@ -139,7 +148,7 @@ class Device:
             pass
         else:
             for block in chain_to_check[1:]:
-                if self.check_pow_proof(block, block.return_block_hash()) and block.return_previous_hash == chain_to_check[chain_to_check.index(block) - 1].compute_hash(hash_whole_block=True):
+                if self.check_pow_proof(block) and block.return_previous_hash == chain_to_check[chain_to_check.index(block) - 1].compute_hash(hash_whole_block=True):
                     pass
                 else:
                     return False
@@ -149,10 +158,12 @@ class Device:
         longest_chain = None
         for peer in self.peer_list:
             if peer.is_online():
-                if peer.return_chain().return_chain_length() > self.blockchain.return_chain_length():
+                peer_chain = peer.return_chain()
+                curr_chain_len = self.return_chain().return_chain_length()
+                if peer_chain.return_chain_length() > curr_chain_len:
                     if self.check_chain_validity(peer_chain):
                         # Longer valid chain found!
-                        curr_chain_len = peer_chain_length
+                        curr_chain_len = peer_chain.return_chain_length()
                         longest_chain = peer_chain
         if longest_chain:
             self.blockchain.replace_chain(longest_chain)
@@ -166,24 +177,24 @@ class Device:
 
     ''' Worker '''
     # TODO change to computation power
-    def worker_local_update(self, localBatchSize, Net, lossFun, opti, global_parameters):
+    def worker_local_update(self):
         print(f"computation power {self.computation_power}, performing {self.computation_power} epoch(s)")
-        Net.load_state_dict(global_parameters, strict=True)
-        self.train_dl = DataLoader(self.train_ds, batch_size=localBatchSize, shuffle=True)
+        self.net.load_state_dict(self.global_parameters, strict=True)
+        self.train_dl = DataLoader(self.train_ds, batch_size=self.local_batch_size, shuffle=True)
         for epoch in range(self.computation_power):
             print(f"epoch {epoch+1}")
             for data, label in self.train_dl:
                 data, label = data.to(self.dev), label.to(self.dev)
-                preds = Net(data)
-                loss = lossFun(preds, label)
+                preds = self.net(data)
+                loss = self.loss_func(preds, label)
                 loss.backward()
-                opti.step()
-                opti.zero_grad()
+                self.opti.step()
+                self.opti.zero_grad()
         print("Done")
-        self.local_parameters = Net.state_dict()
+        self.local_train_parameters = self.net.state_dict()
 
     def return_local_updates_and_signature(self):
-        return {"local_updates_params": self.local_parameters, "signature": self.sign_updates()}
+        return {"local_updates_params": self.local_train_parameters, "signature": self.sign_updates()}
 
     def associate_with_miner(self):
         online_miners_in_peer_list = set()
@@ -197,7 +208,7 @@ class Device:
         return self.worker_associated_miner
 
     def sign_updates(self):
-        return {"pub_key": self.public_key, "modulus": self.modulus, "signature": self.sign_msg(self.local_parameters)}
+        return {"pub_key": self.public_key, "modulus": self.modulus, "signature": self.sign_msg(self.local_train_parameters)}
 
     def worker_reset_vars_for_new_round(self):
         self.received_block_from_miner = None
@@ -210,6 +221,24 @@ class Device:
 
     def return_received_block_from_miner(self):
         return self.received_block_from_miner
+
+    def global_update(self, num_participants, sum_parameters):
+        for var in self.global_parameters:
+            self.global_parameters[var] = (sum_parameters[var] / num_participants)
+    
+    def evaluate_updated_weights(self):
+        with torch.no_grad():
+            self.net.load_state_dict(self.global_parameters, strict=True)
+            sum_accu = 0
+            num = 0
+            self.test_dl = DataLoader(self.test_ds, batch_size=self.local_batch_size, shuffle=True)
+            for data, label in self.test_dl:
+                data, label = data.to(self.dev), label.to(self.dev)
+                preds = self.net(data)
+                preds = torch.argmax(preds, dim=1)
+                sum_accu += (preds == label).float().mean()
+                num += 1
+            return sum_accu / num
 
     ''' miner '''
     def add_worker_to_association(self, worker_device):
@@ -237,7 +266,7 @@ class Device:
         return self.broadcasted_transactions
 
     def sign_block(self, mined_block):
-        mined_block.add_signature(self.return_idx(), self.sign_msg(mined_block.__dict__))
+        mined_block.add_signature(self.sign_msg(mined_block.__dict__))
 
     def verify_transaction_by_signature(self, transaction_to_verify):
         local_updates_params = transaction_to_verify['local_updates']["local_updates_params"]
@@ -250,6 +279,7 @@ class Device:
         return hash == hashFromSignature
     
     def proof_of_work(self, candidate_block, starting_nonce=0):
+        candidate_block.set_mined_by(self.return_idx())
         ''' Brute Force the nonce '''
         candidate_block.set_nonce(starting_nonce)
         current_hash = candidate_block.compute_hash()
@@ -258,7 +288,7 @@ class Device:
             current_hash = candidate_block.compute_hash()
         # return the qualified hash as a PoW proof, to be verified by other devices before adding the block
         # also set its hash as well. block_hash is the same as pow proof
-        candidate_block.set_hash()
+        candidate_block.set_hash(current_hash)
         return candidate_block
 
     def set_mined_block(self, mined_block):
@@ -276,8 +306,10 @@ class Device:
     def toss_propagated_block(self):
         self.received_propagated_block = None
 
-    def verify_and_add_block(self, block_to_add):
+    def verify_and_add_block(self, block_to_add, pause=False):
         # check if the proof is valid(verify _block_hash).
+        if pause:
+            print()
         if not self.check_pow_proof(block_to_add):
             return False
         last_block = self.blockchain.return_last_block()
@@ -309,13 +341,17 @@ class Device:
 
 
 class DevicesInNetwork(object):
-    def __init__(self, data_set_name, is_iid, num_devices, network_stability, dev):
+    def __init__(self, data_set_name, is_iid, batch_size, loss_func, opti, num_devices, network_stability, net, dev):
         self.data_set_name = data_set_name
         self.is_iid = is_iid
+        self.batch_size = batch_size
+        self.loss_func = loss_func
+        self.opti = opti
         self.num_devices = num_devices
+        self.net = net
         self.dev = dev
         self.devices_set = {}
-        self.test_data_loader = None
+        # self.test_data_loader = None
         self.default_network_stability = network_stability
         # distribute dataset
         self.data_set_balanced_allocation()
@@ -324,13 +360,15 @@ class DevicesInNetwork(object):
     def data_set_balanced_allocation(self):
         # read dataset
         mnist_dataset = DatasetLoad(self.data_set_name, self.is_iid)
-        # perpare test data
-        test_data = torch.tensor(mnist_dataset.test_data)
-        test_label = torch.argmax(torch.tensor(mnist_dataset.test_label), dim=1)
-        self.test_data_loader = DataLoader(TensorDataset( test_data, test_label), batch_size=100, shuffle=False)
         # perpare training data
         train_data = mnist_dataset.train_data
         train_label = mnist_dataset.train_label
+        # perpare test data
+        #test_data = torch.tensor(mnist_dataset.test_data)
+        #test_label = torch.argmax(torch.tensor(mnist_dataset.test_label), dim=1)
+        # self.test_data_loader = DataLoader(TensorDataset( test_data, test_label), batch_size=100, shuffle=False)
+        test_data = mnist_dataset.test_data
+        test_label = mnist_dataset.test_label
         # shard dataset and distribute among devices
         shard_size = mnist_dataset.train_data_size // self.num_devices // 2
         shards_id = np.random.permutation(mnist_dataset.train_data_size // shard_size)
@@ -338,14 +376,22 @@ class DevicesInNetwork(object):
             # make it more random by introducing two shards
             shards_id1 = shards_id[i * 2]
             shards_id2 = shards_id[i * 2 + 1]
+            # distribute training data
             data_shards1 = train_data[shards_id1 * shard_size: shards_id1 * shard_size + shard_size]
             data_shards2 = train_data[shards_id2 * shard_size: shards_id2 * shard_size + shard_size]
             label_shards1 = train_label[shards_id1 * shard_size: shards_id1 * shard_size + shard_size]
             label_shards2 = train_label[shards_id2 * shard_size: shards_id2 * shard_size + shard_size]
-            local_data, local_label = np.vstack((data_shards1, data_shards2)), np.vstack((label_shards1, label_shards2))
-            local_label = np.argmax(local_label, axis=1)
+            local_train_data, local_train_label = np.vstack((data_shards1, data_shards2)), np.vstack((label_shards1, label_shards2))
+            local_train_label = np.argmax(local_train_label, axis=1)
+            # distribute test data
+            data_shards1 = test_data[shards_id1 * shard_size: shards_id1 * shard_size + shard_size]
+            data_shards2 = test_data[shards_id2 * shard_size: shards_id2 * shard_size + shard_size]
+            label_shards1 = test_label[shards_id1 * shard_size: shards_id1 * shard_size + shard_size]
+            label_shards2 = test_label[shards_id2 * shard_size: shards_id2 * shard_size + shard_size]
+            local_test_data, local_test_label = np.vstack((data_shards1, data_shards2)), np.vstack((label_shards1, label_shards2))
+            local_test_label = np.argmax(local_test_label, axis=1)
             # assign data to a device and put in the devices set
             device_idx = f'device_{i+1}'
-            a_device = Device(device_idx, TensorDataset(torch.tensor(local_data), torch.tensor(local_label)), self.default_network_stability, self.dev)
+            a_device = Device(device_idx, TensorDataset(torch.tensor(local_train_data), torch.tensor(local_train_label)), TensorDataset(torch.tensor(local_test_data), torch.tensor(local_test_label)), self.batch_size, self.loss_func, self.opti, self.default_network_stability, self.net, self.dev)
             # device index starts from 1
             self.devices_set[device_idx] = a_device

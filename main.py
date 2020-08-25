@@ -48,7 +48,7 @@ def check_network_eligibility(check_online=False):
     if num_online_workers == 0:
         print('There is no workers online in this round, ', end='')
         ineligible = True
-    elif num_online_miners == 0:
+    elif num_online_miners < 2:
         print('There is no miners online in this round, ', end='')
         ineligible = True
     # elif num_online_validators == 0:
@@ -118,13 +118,13 @@ if __name__=="__main__":
     opti = optim.SGD(net.parameters(), lr=args['learning_rate'])
 
     # create devices in the network
-    devices_in_network = DevicesInNetwork(data_set_name='mnist', is_iid=args['IID'], num_devices=args['num_devices'], network_stability=args['network_stability'], dev=dev)
-    test_data_loader = devices_in_network.test_data_loader
+    devices_in_network = DevicesInNetwork(data_set_name='mnist', is_iid=args['IID'], batch_size = args['batchsize'], loss_func = loss_func, opti = opti, num_devices=args['num_devices'], network_stability=args['network_stability'], net=net, dev=dev)
+    # test_data_loader = devices_in_network.test_data_loader
 
-    global_weights = net.state_dict()
+    
     for device_seq, device in devices_in_network.devices_set.items():
         # set initial global weights
-        device.init_global_weights(global_weights)
+        device.init_global_parameters()
         # simulate peer registration, with respect to device idx order 
         register_in_the_network(device)
 
@@ -196,7 +196,7 @@ if __name__=="__main__":
                 worker.pow_resync_chain()
                 # worker perform local update
                 print(f"This is {worker.return_idx()} - worker {worker_iter+1}/{len(workers_this_round)} performing local updates...")
-                worker.worker_local_update(args['batchsize'], net, loss_func, opti, global_weights)
+                worker.worker_local_update()
                 # worker associates with a miner
                 associated_miner = worker.associate_with_miner()
                 if not associated_miner:
@@ -295,7 +295,10 @@ if __name__=="__main__":
                 # unfortunately may go offline
                 if miner.online_switcher():
                     # record mining time
-                    block_generation_time_spent[miner] = (time.time() - start_time)/(miner.return_computation_power())
+                    try:
+                        block_generation_time_spent[miner] = (time.time() - start_time)/(miner.return_computation_power())
+                    except:
+                        block_generation_time_spent[miner] = float('inf')
                     mined_block.set_mining_rewards(args["general_rewards"])
                     miner.receive_rewards(args["general_rewards"])
                     # sign the block
@@ -318,21 +321,21 @@ if __name__=="__main__":
             if miner.is_online():
                 # miner.set_block_to_add(block_to_propagate)
                 miner.receive_propagated_block(block_to_propagate)
-                if miner.verify_and_add_block(miner.return_propagated_block()):
+                if miner.verify_and_add_block(miner.return_propagated_block(), pause=True):
                     pass
                 else:
                     miner.toss_propagated_block()
                     print("Received propagated block is invalid. In real implementation, the miners may continue to mine the block. In here, we just simply pass to the next miner. We can assume at least one miner will receive a valid block in this analysis model.")
                 # may go offline
-                miner.online_swticher()
+                miner.online_switcher()
         
         # miner requests worker to download block
         for miner in miners_this_round:
             if miner.is_online():
                 if miner.return_propagated_block():
                     for worker in miner.return_associated_workers():
-                        block_to_send = miner.blockchain.get_last_block()
-                        if worker.online():
+                        block_to_send = miner.blockchain.return_last_block()
+                        if worker.is_online():
                             worker.receive_block_from_miner(block_to_send)
                             if worker.verify_and_add_block(block_to_send):
                                 pass
@@ -350,14 +353,25 @@ if __name__=="__main__":
                 if worker.return_received_block_from_miner():
                     block_to_operate = worker.blockchain.return_last_block()
                     # avg the gradients
+                    sum_parameters = None
                     transactions = block_to_operate.return_transactions()
+                    for transaction in transactions:
+                        local_updates_params = transaction['local_updates']['local_updates_params']
+                        if sum_parameters is None:
+                            sum_parameters = local_updates_params
+                        else:
+                            for var in sum_parameters:
+                                sum_parameters[var] += local_updates_params[var]
+                    worker.global_update(len(transactions), sum_parameters)
+                    accuracy = worker.evaluate_updated_weights()
+                    print(f'Worker {worker.return_idx()} at the communication round {comm_round} with chain length {worker.return_chain().return_chain_length()} has accuracy: {accuracy}')
+                
 
         # TODO
         '''
         miner
-        3. average gradients
+        3. average gradients(change to worker as why worker would trust the sent avg grads)
         worker
-        1. download and update to global model
         2. exe smart contract - use its own data to calculate accuracy
         3. send accuracy to validator
         validator

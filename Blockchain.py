@@ -9,6 +9,8 @@ class Blockchain:
         self.chain = []
 
     def return_chain_length(self):
+        if type(self.chain) != list:
+            print()
         return len(self.chain)
 
     def return_last_block(self):
@@ -22,4 +24,4 @@ class Blockchain:
         self.chain = chain
 
     def append_block(self, block):
-        self._chain.append(block)
+        self.chain.append(block)

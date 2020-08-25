@@ -21,16 +21,18 @@ class Block:
     # verification - the block already has its hash
     # if hash_whole_block == True -> used in set_previous_hash, where we need to hash the whole previous block
     def compute_hash(self, hash_whole_block=False):
+        block_content = copy.deepcopy(self.__dict__)
         if not hash_whole_block:
-            block_content = copy.deepcopy(self.__dict__)
             block_content['_block_hash'] = None
             block_content['_signature'] = None
             block_content['_mining_rewards'] = None
-            block_content = self.__dict__
-        return sha256(str(block_content).encode('utf-8')).hexdigest()
+        # del block_content['_transactions']
+        # print(str(sorted(block_content.items())).encode('utf-8'))
+        # need sort keys to preserve order of key value pairs
+        return sha256(str(sorted(block_content.items())).encode('utf-8')).hexdigest()
 
-    def set_hash(self):
-        self._block_hash = self.compute_hash()
+    def set_hash(self, the_hash):
+        self._block_hash = the_hash
 
     def nonce_increment(self):
         self._nonce += 1
@@ -67,9 +69,11 @@ class Block:
     def return_current_nonce(self):
         return self._nonce
 
-    def add_signature(self, mined_by, signature):
-        # mined_by is also signed_by
+    def set_mined_by(self, mined_by):
         self._mined_by = mined_by
+
+    def add_signature(self, signature):
+        # signed by mined_by node
         self._signature = signature
 
     def set_mining_rewards(self, mining_rewards):
