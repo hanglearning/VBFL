@@ -278,7 +278,7 @@ if __name__=="__main__":
         for miner in miners_this_round:
             if miner.is_online():
                 # block index starts from 1
-                candidate_block = Block(idx=miner.blockchain.return_chain_length()+1)
+                candidate_block = Block(idx=miner.blockchain.return_chain_length()+1, previous_hash=miner.blockchain.return_last_block_hash())
                 start_time = time.time()
                 # self verification
                 for unconfirmmed_transaction in miner.return_unconfirmmed_transactions():

@@ -137,8 +137,8 @@ class Device:
     def check_pow_proof(self, block_to_check):
         # remove its block hash(compute_hash() by default) to verify pow_proof as block hash was set after pow
         pow_proof = block_to_check.return_pow_proof()
-        print("pow_proof", pow_proof)
-        print("compute_hash", block_to_check.compute_hash())
+        # print("pow_proof", pow_proof)
+        # print("compute_hash", block_to_check.compute_hash())
         return pow_proof.startswith('0' * Blockchain.pow_difficulty) and pow_proof == block_to_check.compute_hash()
 
     def check_chain_validity(self, chain_to_check):
@@ -152,7 +152,9 @@ class Device:
                     pass
                 else:
                     if not self.check_pow_proof(block):
-                        print()
+                        print("block_to_check string")
+                        print(str(sorted(block.__dict__.items())).encode('utf-8'))
+                        
                     print(block.return_previous_hash() == chain_to_check[chain_to_check.index(block) - 1].compute_hash(hash_whole_block=True))
                     print(f"index {chain_to_check.index(block) - 1}")
                     print("pre", block.return_previous_hash())
@@ -188,7 +190,7 @@ class Device:
         self.net.load_state_dict(self.global_parameters, strict=True)
         self.train_dl = DataLoader(self.train_ds, batch_size=self.local_batch_size, shuffle=True)
         for epoch in range(self.computation_power):
-            print(f"epoch {epoch+1}")
+            # print(f"epoch {epoch+1}")
             for data, label in self.train_dl:
                 data, label = data.to(self.dev), label.to(self.dev)
                 preds = self.net(data)

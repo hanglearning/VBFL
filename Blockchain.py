@@ -21,7 +21,13 @@ class Blockchain:
         else:
             # blockchain doesn't even have its genesis block
             return None
-    
+
+    def return_last_block_hash(self):
+        if len(self.chain) > 0:
+            return self.return_last_block().compute_hash(hash_whole_block=True)
+        else:
+            return None
+
     def replace_chain(self, chain):
         self.chain = copy.deepcopy(chain)
 

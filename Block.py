@@ -4,10 +4,10 @@ import json
 from hashlib import sha256
 
 class Block:
-    def __init__(self, idx, transactions=None, previous_hash=None, nonce=0, block_hash=None, mined_by=None, signature=None, mining_rewards=None):
+    def __init__(self, idx, previous_hash, transactions=None, nonce=0, block_hash=None, mined_by=None, signature=None, mining_rewards=None):
         self._idx = idx
-        self._transactions = transactions or []
         self._previous_hash = previous_hash
+        self._transactions = transactions or []
         self._nonce = nonce
         # the hash of the current block, calculated by compute_hash
         self._block_hash = block_hash
