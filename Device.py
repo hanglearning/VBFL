@@ -43,6 +43,8 @@ class Device:
         self.private_key = None
         self.public_key = None
         self.generate_rsa_key()
+        # a flag to phase out this device for a certain comm round(simulation friendly)
+        # self.phased_out = False
         ''' For workers '''
         self.received_block_from_miner = None
         ''' For miners '''
@@ -112,6 +114,15 @@ class Device:
 
     def is_online(self):
         return self.on_line
+
+    # def phase_out(self):
+    #     self.phased_out = True
+
+    # def reset_phase_out(self):
+    #     self.phased_out = True
+
+    # def is_not_phased_out(self):
+    #     return self.phased_out
     
     def update_peer_list(self):
         online_peers = set()
@@ -151,14 +162,14 @@ class Device:
                 if self.check_pow_proof(block) and block.return_previous_hash() == chain_to_check[chain_to_check.index(block) - 1].compute_hash(hash_whole_block=True):
                     pass
                 else:
-                    if not self.check_pow_proof(block):
-                        print("block_to_check string")
-                        print(str(sorted(block.__dict__.items())).encode('utf-8'))
-                        
-                    print(block.return_previous_hash() == chain_to_check[chain_to_check.index(block) - 1].compute_hash(hash_whole_block=True))
-                    print(f"index {chain_to_check.index(block) - 1}")
-                    print("pre", block.return_previous_hash())
-                    print(chain_to_check[chain_to_check.index(block) - 1].compute_hash(hash_whole_block=True))
+                    # if not self.check_pow_proof(block):
+                    #     print("block_to_check string")
+                    #     print(str(sorted(block.__dict__.items())).encode('utf-8'))
+
+                    # print(block.return_previous_hash() == chain_to_check[chain_to_check.index(block) - 1].compute_hash(hash_whole_block=True))
+                    # print(f"index {chain_to_check.index(block) - 1}")
+                    # print("pre", block.return_previous_hash())
+                    # print(chain_to_check[chain_to_check.index(block) - 1].compute_hash(hash_whole_block=True))
                     return False
         return True
 
@@ -324,10 +335,10 @@ class Device:
             last_block_hash = last_block.compute_hash(hash_whole_block=True)
             if block_to_add.return_previous_hash() != last_block_hash:
                 # debug
-                # print("last_block")
-                # print(str(sorted(last_block.__dict__.items())).encode('utf-8'))
-                # print("block_to_add")
-                # print(str(sorted(block_to_add.__dict__.items())).encode('utf-8'))
+                #print("last_block")
+                #print(str(sorted(last_block.__dict__.items())).encode('utf-8'))
+                #print("block_to_add")
+                #print(str(sorted(block_to_add.__dict__.items())).encode('utf-8'))
                 #debug
                 return False
         # All verifications done.
