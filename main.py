@@ -31,6 +31,22 @@ parser.add_argument('-ns', '--network_stability', type=float, default=0.8, help=
 parser.add_argument('-gr', '--general_rewards', type=int, default=1, help='rewards for verification of one transaction, mining and so forth')
 parser.add_argument('-v', '--verbose', type=int, default=0, help='print verbose debug log')
 
+def debug_chain_sync():
+    chain_hash_check_list = []
+    for device_seq, device in devices_in_network.devices_set.items():
+        if device.is_online():
+            chain = device.return_blockchain_object().return_chain_structure()
+            print(f"{device.return_idx()} has chain length {len(chain)}")
+            if chain_hash_check_list:
+                for block_iter in range(len(chain)):
+                    block = chain[block_iter]
+                    if block.return_block_hash() != chain_hash_check_list[block_iter]:
+                        sys.exit("WRONG!")
+            else:
+                for block in chain:
+                    chain_hash_check_list.append(block.return_block_hash())
+
+
 def check_network_eligibility(check_online=False):
     num_online_workers = 0
     num_online_miners = 0
@@ -206,6 +222,8 @@ if __name__=="__main__":
                     associated_miner.add_worker_to_association(worker)
                 else:
                     worker.remove_peers(associated_miner_idx)
+                    # TODO
+                    #reassign a miner
                 # may go offline during model updates transmission
                 worker.online_switcher() 
         
@@ -239,7 +257,7 @@ if __name__=="__main__":
                         potential_offline_workers.add(worker)
                 miner.remove_peers(potential_offline_workers)
                 if not miner.return_unconfirmmed_transactions():
-                    print("Workers disconnected while transmitting updates.")
+                    print("Workers offline or disconnected while transmitting updates.")
                     continue
                 # broadcast to other miners
                 # may go offline at any point
@@ -247,6 +265,9 @@ if __name__=="__main__":
                     miner.broadcast_updates()
                 if miner.is_online():
                     miner.online_switcher()
+
+        debug_chain_sync()
+
         if not check_network_eligibility():
             print("Go to the next round.\n")
             continue
@@ -255,9 +276,9 @@ if __name__=="__main__":
         # time spent included in the block_generation_time
         block_generation_time_spent = {}
         for miner in miners_this_round:
-            # block index starts from 1
-            candidate_block = Block(idx=miner.blockchain.return_chain_length()+1)
             if miner.is_online():
+                # block index starts from 1
+                candidate_block = Block(idx=miner.blockchain.return_chain_length()+1)
                 start_time = time.time()
                 # self verification
                 for unconfirmmed_transaction in miner.return_unconfirmmed_transactions():
@@ -323,6 +344,7 @@ if __name__=="__main__":
                 if miner.verify_and_add_block(miner.return_propagated_block()):
                     pass
                 else:
+                    miner.verify_and_add_block(miner.return_propagated_block())
                     miner.toss_propagated_block()
                     print("Received propagated block is either invalid or does not fit this chain. In real implementation, the miners may continue to mine the block. In here, we just simply pass to the next miner. We can assume at least one miner will receive a valid block in this analysis model.")
                 # may go offline
@@ -331,9 +353,9 @@ if __name__=="__main__":
         # miner requests worker to download block
         for miner in miners_this_round:
             if miner.is_online():
-                if miner.return_propagated_block():
+                block_to_send = miner.blockchain.return_last_block()
+                if miner.return_propagated_block(): # TODO
                     for worker in miner.return_associated_workers():
-                        block_to_send = miner.blockchain.return_last_block()
                         if worker.is_online():
                             worker.receive_block_from_miner(block_to_send)
                             if worker.verify_and_add_block(block_to_send):
@@ -353,6 +375,7 @@ if __name__=="__main__":
                     block_to_operate = worker.blockchain.return_last_block()
                     # avg the gradients
                     sum_parameters = None
+                    # TODO verify transaction??
                     transactions = block_to_operate.return_transactions()
                     for transaction in transactions:
                         local_updates_params = transaction['local_updates']['local_updates_params']

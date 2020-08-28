@@ -13,8 +13,6 @@ class Blockchain:
         return self.chain
 
     def return_chain_length(self):
-        if type(self.chain) != list:
-            print('not list and weird')
         return len(self.chain)
 
     def return_last_block(self):
@@ -25,7 +23,7 @@ class Blockchain:
             return None
     
     def replace_chain(self, chain):
-        self.chain = chain
+        self.chain = copy.deepcopy(chain)
 
     def append_block(self, block):
-        self.chain.append(block)
+        self.chain.append(copy.deepcopy(block))

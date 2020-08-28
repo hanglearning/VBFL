@@ -137,6 +137,8 @@ class Device:
     def check_pow_proof(self, block_to_check):
         # remove its block hash(compute_hash() by default) to verify pow_proof as block hash was set after pow
         pow_proof = block_to_check.return_pow_proof()
+        print("pow_proof", pow_proof)
+        print("compute_hash", block_to_check.compute_hash())
         return pow_proof.startswith('0' * Blockchain.pow_difficulty) and pow_proof == block_to_check.compute_hash()
 
     def check_chain_validity(self, chain_to_check):
@@ -146,9 +148,15 @@ class Device:
         else:
             chain_to_check = chain_to_check.return_chain_structure()
             for block in chain_to_check[1:]:
-                if self.check_pow_proof(block) and block.return_previous_hash == chain_to_check[chain_to_check.index(block) - 1].compute_hash(hash_whole_block=True):
+                if self.check_pow_proof(block) and block.return_previous_hash() == chain_to_check[chain_to_check.index(block) - 1].compute_hash(hash_whole_block=True):
                     pass
                 else:
+                    if not self.check_pow_proof(block):
+                        print()
+                    print(block.return_previous_hash() == chain_to_check[chain_to_check.index(block) - 1].compute_hash(hash_whole_block=True))
+                    print(f"index {chain_to_check.index(block) - 1}")
+                    print("pre", block.return_previous_hash())
+                    print(chain_to_check[chain_to_check.index(block) - 1].compute_hash(hash_whole_block=True))
                     return False
         return True
 

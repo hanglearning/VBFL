@@ -1,1 +1,82 @@
-Worker device_7 at the communication round 1 with chain length 1 has accuracy: 0.1133333072066307Worker device_6 at the communication round 1 with chain length 1 has accuracy: 0.1016666367650032Worker device_2 at the communication round 1 with chain length 1 has accuracy: 0.09833331406116486Worker device_4 at the communication round 2 with chain length 2 has accuracy: 0.1016666516661644Worker device_2 at the communication round 2 with chain length 2 has accuracy: 0.09833332151174545Worker device_7 at the communication round 3 with chain length 3 has accuracy: 0.1133333072066307Worker device_2 at the communication round 3 with chain length 3 has accuracy: 0.09833331406116486Worker device_6 at the communication round 7 with chain length 5 has accuracy: 0.23500005900859833
+Worker device_7 at the communication round 1 with chain length 1 has accuracy: 0.1133333072066307Worker device_6 at the communication round 1 with chain length 1 has accuracy: 0.1016666367650032Worker device_2 at the communication round 1 with chain length 1 has accuracy: 0.09833331406116486Worker device_4 at the communication round 2 with chain length 2 has accuracy: 0.1016666516661644Worker device_2 at the communication round 2 with chain length 2 has accuracy: 0.09833332151174545Worker device_7 at the communication round 3 with chain length 3 has accuracy: 0.1133333072066307Worker device_2 at the communication round 3 with chain length 3 has accuracy: 0.09833331406116486Worker device_6 at the communication round 7 with chain length 5 has accuracy: 0.23500005900859833Worker device_2 at the communication round 1 with chain length 1 has accuracy: 0.2849999964237213
+
+
+Worker device_5 at the communication round 1 with chain length 1 has accuracy: 0.2783333361148834
+Worker device_2 at the communication round 18 with chain length 1 has accuracy: 0.07500000298023224
+Worker device_1 at the communication round 17 with chain length 1 has accuracy: 0.125
+Worker device_1 at the communication round 36 with chain length 3 has accuracy: 0.125
+Worker device_1 at the communication round 1 with chain length 1 has accuracy: 0.07500000298023224
+Worker device_2 at the communication round 11 with chain length 2 has accuracy: 0.10000000149011612
+Worker device_2 at the communication round 12 with chain length 3 has accuracy: 0.07500000298023224
+Worker device_1 at the communication round 13 with chain length 4 has accuracy: 0.07500000298023224
+
+
+Worker device_2 at the communication round 1 with chain length 1 has accuracy: 0.07500000298023224
+Worker device_1 at the communication round 14 with chain length 4 has accuracy: 0.22499999403953552
+Worker device_3 at the communication round 22 with chain length 5 has accuracy: 0.05000000074505806
+Worker device_1 at the communication round 24 with chain length 6 has accuracy: 0.125
+Worker device_1 at the communication round 32 with chain length 7 has accuracy: 0.125
+Worker device_1 at the communication round 46 with chain length 8 has accuracy: 0.22499999403953552
+Worker device_3 at the communication round 49 with chain length 9 has accuracy: 0.44999998807907104
+Worker device_1 at the communication round 54 with chain length 10 has accuracy: 0.125
+Worker device_3 at the communication round 59 with chain length 11 has accuracy: 0.20000000298023224
+Worker device_1 at the communication round 75 with chain length 12 has accuracy: 0.07500000298023224
+Worker device_3 at the communication round 87 with chain length 13 has accuracy: 0.30000001192092896
+Worker device_2 at the communication round 94 with chain length 14 has accuracy: 0.32500001788139343
+Worker device_1 at the communication round 96 with chain length 15 has accuracy: 0.07500000298023224
+
+
+Worker device_2 at the communication round 14 with chain length 1 has accuracy: 0.32499998807907104
+Worker device_2 at the communication round 1073 with chain length 2 has accuracy: 0.32499998807907104
+Worker device_3 at the communication round 1164 with chain length 3 has accuracy: 0.4749999940395355
+
+
+Worker device_2 at the communication round 787 with chain length 3 has accuracy: 0.32499998807907104
+Worker device_1 at the communication round 2574 with chain length 2 has accuracy: 0.574999988079071
+Worker device_1 at the communication round 335 with chain length 4 has accuracy: 0.375
+Worker device_1 at the communication round 369 with chain length 5 has accuracy: 0.2750000059604645
+Worker device_3 at the communication round 222 with chain length 2 has accuracy: 0.25
+Worker device_2 at the communication round 395 with chain length 3 has accuracy: 0.05000000074505806
+Worker device_2 at the communication round 108 with chain length 2 has accuracy: 0.2750000059604645
+Worker device_2 at the communication round 1394 with chain length 10 has accuracy: 0.17500001192092896
+Worker device_1 at the communication round 1744 with chain length 12 has accuracy: 0.4750000238418579
+Worker device_5 at the communication round 1 with chain length 1 has accuracy: 0.10000000149011612
+Worker device_3 at the communication round 1 with chain length 1 has accuracy: 0.10000000149011612
+Worker device_9 at the communication round 1 with chain length 1 has accuracy: 0.30000001192092896
+Worker device_3 at the communication round 3 with chain length 2 has accuracy: 0.10000000149011612
+Worker device_9 at the communication round 3 with chain length 2 has accuracy: 0.30000001192092896
+Worker device_9 at the communication round 1 with chain length 1 has accuracy: 0.10000000149011612
+Worker device_10 at the communication round 1 with chain length 1 has accuracy: 0.10000000149011612
+Worker device_6 at the communication round 3 with chain length 2 has accuracy: 0.10000000149011612
+Worker device_7 at the communication round 3 with chain length 2 has accuracy: 0.20000000298023224
+Worker device_5 at the communication round 3 with chain length 2 has accuracy: 0.30000001192092896
+Worker device_6 at the communication round 2 with chain length 2 has accuracy: 0.0
+Worker device_8 at the communication round 2 with chain length 2 has accuracy: 0.10000000149011612
+Worker device_4 at the communication round 2 with chain length 2 has accuracy: 0.30000001192092896
+Worker device_10 at the communication round 1 with chain length 1 has accuracy: 0.30000001192092896
+Worker device_2 at the communication round 1 with chain length 1 has accuracy: 0.10000000149011612
+Worker device_5 at the communication round 1 with chain length 1 has accuracy: 0.0
+Worker device_6 at the communication round 4 with chain length 3 has accuracy: 0.0
+Worker device_7 at the communication round 2 with chain length 1 has accuracy: 0.30000001192092896
+Worker device_2 at the communication round 2 with chain length 1 has accuracy: 0.10000000149011612
+Worker device_9 at the communication round 1 with chain length 1 has accuracy: 0.10000000149011612
+Worker device_3 at the communication round 1 with chain length 1 has accuracy: 0.10000000149011612
+Worker device_1 at the communication round 1 with chain length 1 has accuracy: 0.10000000149011612
+Worker device_6 at the communication round 1 with chain length 1 has accuracy: 0.0
+Worker device_10 at the communication round 1 with chain length 1 has accuracy: 0.10000000149011612
+Worker device_4 at the communication round 1 with chain length 1 has accuracy: 0.0
+Worker device_4 at the communication round 1 with chain length 1 has accuracy: 0.4000000059604645
+Worker device_9 at the communication round 1 with chain length 1 has accuracy: 0.0
+Worker device_10 at the communication round 1 with chain length 1 has accuracy: 0.20000000298023224
+Worker device_3 at the communication round 1 with chain length 1 has accuracy: 0.20000000298023224
+Worker device_5 at the communication round 1 with chain length 1 has accuracy: 0.5
+Worker device_6 at the communication round 3 with chain length 3 has accuracy: 0.0
+Worker device_10 at the communication round 3 with chain length 3 has accuracy: 0.10000000149011612
+Worker device_5 at the communication round 3 with chain length 3 has accuracy: 0.4000000059604645
+Worker device_3 at the communication round 2 with chain length 2 has accuracy: 0.20000000298023224
+Worker device_6 at the communication round 2 with chain length 2 has accuracy: 0.0
+Worker device_2 at the communication round 2 with chain length 2 has accuracy: 0.10000000149011612
+Worker device_10 at the communication round 2 with chain length 2 has accuracy: 0.0
+Worker device_7 at the communication round 2 with chain length 2 has accuracy: 0.0
+Worker device_5 at the communication round 2 with chain length 2 has accuracy: 0.0
+Worker device_8 at the communication round 2 with chain length 2 has accuracy: 0.10000000149011612
