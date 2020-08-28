@@ -325,28 +325,29 @@ class Device:
     def toss_propagated_block(self):
         self.received_propagated_block = None
 
-    def verify_and_add_block(self, block_to_add):
+    def verify_block(self, block_to_verify):
         # check if the proof is valid(verify _block_hash).
-        if not self.check_pow_proof(block_to_add):
+        if not self.check_pow_proof(block_to_verify):
             return False
         last_block = self.blockchain.return_last_block()
         if last_block is not None:
             # check if the previous_hash referred in the block and the hash of latest block in the chain match.
             last_block_hash = last_block.compute_hash(hash_whole_block=True)
-            if block_to_add.return_previous_hash() != last_block_hash:
+            if block_to_verify.return_previous_hash() != last_block_hash:
                 # debug
                 #print("last_block")
                 #print(str(sorted(last_block.__dict__.items())).encode('utf-8'))
-                #print("block_to_add")
-                #print(str(sorted(block_to_add.__dict__.items())).encode('utf-8'))
+                #print("block_to_verify")
+                #print(str(sorted(block_to_verify.__dict__.items())).encode('utf-8'))
                 #debug
                 return False
         # All verifications done.
         # ???When syncing by calling consensus(), rebuilt block doesn't have this field. add the block hash after verifying
-			# block_to_add.set_hash()
-        self.blockchain.append_block(block_to_add)
-        return True
+			# block_to_verify.set_hash()
+        return block_to_verify
 
+    def add_block(self, block_to_add):
+        self.blockchain.append_block(block_to_add)
 
     # def set_block_to_add(self, block_to_add):
     #     self.block_to_add = block_to_add

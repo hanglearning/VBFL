@@ -339,35 +339,23 @@ if __name__=="__main__":
 
         # miner propogate the winning block (just let other miners receive it, verify it and add to the blockchain)
         debug_propagated_block_list = []
-        all_propagated_block = []
+        last_block_hash = {}
         for miner in miners_this_round:
             if miner.is_online():
                 # miner.set_block_to_add(block_to_propagate)
                 miner.receive_propagated_block(block_to_propagate)
-                if miner.verify_and_add_block(miner.return_propagated_block()):
-                    all_propagated_block.append(miner.return_propagated_block())
+                verified_block = miner.verify_block(miner.return_propagated_block())
+                if verified_block:
+                    last_block_hash[miner.return_idx()]['block_idx'] = miner.return_blockchain_object().return_last_block().return_block_idx()
+                    last_block_hash[miner.return_idx()]['block_hash'] = miner.return_blockchain_object().return_last_block_hash()
+                    miner.add_block(verified_block)
                     debug_propagated_block_list.append(True)
                     pass
                 else:
-                    for already_good_block in all_propagated_block:
-                        this_miner_recved_prop_b = miner.return_propagated_block()
-                        this_miner_recved_prop_b = this_miner_recved_prop_b.compute_hash()
-                        already_good_block = already_good_block.compute_hash()
-                        if this_miner_recved_prop_b == already_good_block:
-                            print("Good")
-                        else:
-                            print("bad")
-                        # this_miner_recved_prop_b = this_miner_recved_prop_b.__dict__
-                        # already_good_block = already_good_block.__dict__
-                        # if this_miner_recved_prop_b == already_good_block:
-                        #     print("good")
-                        # else:
-                        #     print("bad")
-                        #     diffkeys = [k for k in this_miner_recved_prop_b if already_good_block[k] != this_miner_recved_prop_b[k]]
-                        #     for k in diffkeys:
-                        #         print(k, ':', this_miner_recved_prop_b[k], '->', already_good_block[k])
+                    last_block_hash[miner.return_idx()]['block_idx'] = miner.return_blockchain_object().return_last_block().return_block_idx()
+                    last_block_hash[miner.return_idx()]['block_hash'] = miner.return_blockchain_object().return_last_block_hash()
                     debug_propagated_block_list.append(False)
-                    miner.verify_and_add_block(miner.return_propagated_block())
+                    miner.verify_block(miner.return_propagated_block())
                     miner.toss_propagated_block()
                     print("Received propagated block is either invalid or does not fit this chain. In real implementation, the miners may continue to mine the block. In here, we just simply pass to the next miner. We can assume at least one miner will receive a valid block in this analysis model.")
                 # may go offline
@@ -375,6 +363,7 @@ if __name__=="__main__":
         print(debug_propagated_block_list)
         print()
         
+        worker_last_block_hash = {}
         # miner requests worker to download block
         for miner in miners_this_round:
             if miner.is_online():
@@ -383,10 +372,15 @@ if __name__=="__main__":
                     for worker in miner.return_associated_workers():
                         if worker.is_online():
                             worker.receive_block_from_miner(block_to_send)
-                            if worker.verify_and_add_block(block_to_send):
+                            verified_block = worker.verify_block(worker.return_received_block_from_miner())
+                            if verified_block:
+                                worker_last_block_hash[worker.return_idx()]['block_idx'] = worker.return_blockchain_object().return_last_block().return_block_idx()
+                                worker_last_block_hash[worker.return_idx()]['block_hash'] = worker.return_blockchain_object().return_last_block_hash()
+                                worker.add_block(verified_block)
                                 pass
                             else:
-                                worker.verify_and_add_block(block_to_send)
+                                worker_last_block_hash[worker.return_idx()]['block_idx'] = worker.return_blockchain_object().return_last_block().return_block_idx()
+                                worker_last_block_hash[worker.return_idx()]['block_hash'] = worker.return_blockchain_object().return_last_block_hash()
                                 worker.toss_received_block()
                                 print("Received block from the associated miner is not valid. Pass to the next worker.")
                             worker.online_switcher()
