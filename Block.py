@@ -4,16 +4,22 @@ import json
 from hashlib import sha256
 
 class Block:
-    def __init__(self, idx, previous_hash, transactions=None, nonce=0, block_hash=None, mined_by=None, signature=None, mining_rewards=None):
+    def __init__(self, idx, previous_hash, transactions=None, nonce=0, block_hash=None, mined_by=None, signature=None, mining_rewards=None, is_validator_block=False, validated_by=None, validating_rewards=None, validator_transactions=None):
         self._idx = idx
         self._previous_hash = previous_hash
         self._transactions = transactions or []
         self._nonce = nonce
         # the hash of the current block, calculated by compute_hash
         self._block_hash = block_hash
-        self._mined_by = mined_by
         self._signature = signature
+        # miner specific
+        self._mined_by = mined_by
         self._mining_rewards = mining_rewards
+        # validator specific
+        self._is_validator_block = is_validator_block
+        self._validated_by = validated_by
+        self._validating_rewards = validating_rewards
+        self._validator_transactions = validator_transactions or []
 
     # compute_hash() also used to return value for block verification
     # if False by default, used for pow and verification, in which block_hash has to be None, because at this moment -
@@ -76,3 +82,14 @@ class Block:
 
     def set_mining_rewards(self, mining_rewards):
         self._mining_rewards = mining_rewards
+
+    ''' Validator Specific '''
+    def is_validator_block(self):
+        return self._is_validator_block
+
+    def add_validator_transaction(self, validator_transaction):
+        self._validator_transactions.append(validator_transaction)
+
+            
+
+    

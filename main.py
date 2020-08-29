@@ -31,6 +31,11 @@ parser.add_argument('-iid', '--IID', type=int, default=0, help='the way to alloc
 parser.add_argument('-ns', '--network_stability', type=float, default=0.8, help='the odds a device is online')
 parser.add_argument('-gr', '--general_rewards', type=int, default=1, help='rewards for verification of one transaction, mining and so forth')
 parser.add_argument('-v', '--verbose', type=int, default=0, help='print verbose debug log')
+parser.add_argument('-ko', '--kick_out_rounds', type=int, default=0, help='a device is kicked out of the network if its accuracy shows decreasing for the number of rounds recorded by a winning validator')
+
+def smart_contract_worker_upload_accuracy_to_validator(worker, validator):
+    validator.accept_accuracy(worker)
+
 
 def debug_chain_sync():
     chain_hash_check_list = []
@@ -58,19 +63,19 @@ def check_network_eligibility(check_online=False):
     for miner in miners_this_round:
         if miner.is_online():
             num_online_miners += 1
-    # for validator in validators_this_round:
-    #     if validator.is_online():
-    #         num_online_validators += 1
+    for validator in validators_this_round:
+        if validator.is_online():
+            num_online_validators += 1
     ineligible = False
     if num_online_workers == 0:
         print('There is no workers online in this round, ', end='')
         ineligible = True
-    elif num_online_miners < 2:
+    elif num_online_miners == 0:
         print('There is no miners online in this round, ', end='')
         ineligible = True
-    # elif num_online_validators == 0:
-    #     print('There is no validators online in this round, ', end='')
-    #     ineligible = True
+    elif num_online_validators == 0:
+        print('There is no validators online in this round, ', end='')
+        ineligible = True
     if ineligible:
         print('which is ineligible for the network to continue operating.')
         return False
@@ -135,7 +140,7 @@ if __name__=="__main__":
     opti = optim.SGD(net.parameters(), lr=args['learning_rate'])
 
     # create devices in the network
-    devices_in_network = DevicesInNetwork(data_set_name='mnist', is_iid=args['IID'], batch_size = args['batchsize'], loss_func = loss_func, opti = opti, num_devices=args['num_devices'], network_stability=args['network_stability'], net=net, dev=dev)
+    devices_in_network = DevicesInNetwork(data_set_name='mnist', is_iid=args['IID'], batch_size = args['batchsize'], loss_func = loss_func, opti = opti, num_devices=args['num_devices'], network_stability=args['network_stability'], net=net, dev=dev, kick_out_rounds=args['kick_out_rounds'])
     # test_data_loader = devices_in_network.test_data_loader
 
     
@@ -197,6 +202,9 @@ if __name__=="__main__":
         for worker in workers_this_round:
             if worker.is_online():
                 worker.worker_reset_vars_for_new_round()
+        for validator in validators_this_round:
+            if validator.is_online():
+                validator.validator_reset_vars_for_new_round()
 
         # incase no device is online for this communication round
         #  no_device_online = False
@@ -218,7 +226,7 @@ if __name__=="__main__":
                     worker.update_model_after_chain_resync(chain_length_difference)
                 # worker perform local update
                 print(f"This is {worker.return_idx()} - worker {worker_iter+1}/{len(workers_this_round)} performing local updates...")
-                worker.worker_local_update()
+                worker.worker_local_update(args["general_rewards"])
                 # worker associates with a miner
                 associated_miner = worker.associate_with_miner()
                 if not associated_miner:
@@ -406,22 +414,59 @@ if __name__=="__main__":
         if not check_network_eligibility():
             print("Go to the next round.\n")
             continue
-        # miner requests worker to download block
+        
+        # miner requests worker to download block and do global updates
         for worker in workers_this_round:
             if worker.is_online():
                 if worker.return_received_block_from_miner():
                     worker.global_update()
                     accuracy = worker.evaluate_updated_weights()
+                    worker.set_accuracy_this_round(accuracy)
                     report_msg = f'Worker {worker.return_idx()} at the communication round {comm_round+1} with chain length {worker.return_blockchain_object().return_chain_length()} has accuracy: {accuracy}\n'
                     print(report_msg)
                     with open("accuracy_report.txt", "a") as file:
                         file.write(report_msg)
+                    worker.online_switcher()
+        
+        if not check_network_eligibility():
+            print("Go to the next round.\n")
+            continue
+        
+        # TODO validator may also be evil. how to validate validators?
+        # workers send their accuracies to validators and validators record the accuracies in a block
+        # iterating validator is easier than iterating worker because of the creation of the validator block
+        for validator in validators_this_round:
+            if validator.is_online():
+                # pow sync chain
+                validator.pow_resync_chain()
+                last_block_on_validator_chain = validator.return_blockchain_object().return_last_block()
+                # check last block
+                if last_block_on_validator_chain==None or last_block_on_validator_chain.is_validator_block():
+                    print("last block ineligible to be appended")
+                    continue
+                online_workers_in_peer_list = validator.get_online_workers()
+                if not online_workers_in_peer_list:
+                    print(f"Cannot find online workers in {worker.return_idx()} peer list.")
+                    continue
+                validator_candidate_block = Block(idx=validator.blockchain.return_chain_length()+1, previous_hash=validator.blockchain.return_last_block_hash(), is_validator_block=True)
+                for validator in online_validators_in_peer_list:
+                    smart_contract_worker_upload_accuracy_to_validator(worker, validator)
+                validator.record_worker_performance_in_block(validator_candidate_block, comm_round, args["general_rewards"])
+                validator.sign_block(validator_candidate_block)
+                # associate miner
+                if validator.online_switcher():
+                    associated_miner = validator.associate_with_miner()
+                    if not associated_miner:
+                        print(f"Cannot find a miner in {validator.return_idx()} peer list.")
+                        continue
+                    # TODO
+                    validator.
+                    # miner only mines the first accepted validator's block
+
                 
 
         # TODO
         '''
-        miner
-        3. average gradients(change to worker as why worker would trust the sent avg grads)
         worker
         2. exe smart contract - use its own data to calculate accuracy
         3. send accuracy to validator

@@ -11,7 +11,7 @@ from hashlib import sha256
 from Blockchain import Blockchain
 
 class Device:
-    def __init__(self, idx, assigned_train_ds, assigned_test_ds, local_batch_size, loss_func, opti, network_stability, net, dev):
+    def __init__(self, idx, assigned_train_ds, assigned_test_ds, local_batch_size, loss_func, opti, network_stability, net, dev, kick_out_rounds):
         self.idx = idx
         self.train_ds = assigned_train_ds
         self.test_ds = assigned_test_ds
@@ -47,6 +47,7 @@ class Device:
         # self.phased_out = False
         ''' For workers '''
         self.received_block_from_miner = None
+        self.accuracy_this_round = None
         ''' For miners '''
         self.associated_worker_set = set()
         # dict cannot be added to set()
@@ -55,6 +56,11 @@ class Device:
         self.mined_block = None
         self.received_propagated_block = None
         # self.block_to_add = None
+        ''' For validators '''
+        self.kick_out_rounds = kick_out_rounds
+        self.accuracies_this_round = {}
+        self.worker_accuracy_records = {}
+        
 
     ''' Common Methods '''
     def return_idx(self):
@@ -92,8 +98,7 @@ class Device:
 
     def assign_role(self):
         # equal probability
-        # TODO give validator back later
-        role_choice = random.randint(0, 1)
+        role_choice = random.randint(0, 2)
         if role_choice == 0:
             self.role = "worker"
         elif role_choice == 1:
@@ -197,9 +202,33 @@ class Device:
     def return_computation_power(self):
         return self.computation_power
 
+    def verify_block(self, block_to_verify):
+        # check if the proof is valid(verify _block_hash).
+        if not self.check_pow_proof(block_to_verify):
+            return False
+        last_block = self.blockchain.return_last_block()
+        if last_block is not None:
+            # check if the previous_hash referred in the block and the hash of latest block in the chain match.
+            last_block_hash = last_block.compute_hash(hash_whole_block=True)
+            if block_to_verify.return_previous_hash() != last_block_hash:
+                # debug
+                #print("last_block")
+                #print(str(sorted(last_block.__dict__.items())).encode('utf-8'))
+                #print("block_to_verify")
+                #print(str(sorted(block_to_verify.__dict__.items())).encode('utf-8'))
+                #debug
+                return False
+        # All verifications done.
+        # ???When syncing by calling consensus(), rebuilt block doesn't have this field. add the block hash after verifying
+			# block_to_verify.set_hash()
+        return block_to_verify
+
+    def add_block(self, block_to_add):
+        self.blockchain.append_block(block_to_add)
+
     ''' Worker '''
     # TODO change to computation power
-    def worker_local_update(self):
+    def worker_local_update(self, rewards):
         print(f"computation power {self.computation_power}, performing {self.computation_power} epoch(s)")
         self.net.load_state_dict(self.global_parameters, strict=True)
         self.train_dl = DataLoader(self.train_ds, batch_size=self.local_batch_size, shuffle=True)
@@ -212,28 +241,25 @@ class Device:
                 loss.backward()
                 self.opti.step()
                 self.opti.zero_grad()
+            self.receive_rewards(rewards)
         print("Done")
         self.local_train_parameters = self.net.state_dict()
 
+    def set_accuracy_this_round(self, accuracy):
+        self.accuracy_this_round = accuracy
+
+    def return_accuracy_this_round(self):
+        return self.accuracy_this_round
+
     def return_local_updates_and_signature(self):
         return {"local_updates_params": copy.deepcopy(self.local_train_parameters), "signature": self.sign_updates()}
-
-    def associate_with_miner(self):
-        online_miners_in_peer_list = set()
-        for peer in self.peer_list:
-            if peer.is_online():
-                if peer.return_role() == 'miner':
-                    online_miners_in_peer_list.add(peer)
-        if not online_miners_in_peer_list:
-            return False
-        self.worker_associated_miner = random.sample(online_miners_in_peer_list, 1)[0]
-        return self.worker_associated_miner
-
+    
     def sign_updates(self):
         return {"pub_key": self.public_key, "modulus": self.modulus, "signature": self.sign_msg(self.local_train_parameters)}
 
     def worker_reset_vars_for_new_round(self):
         self.received_block_from_miner = None
+        self.accuracy_this_round = None
 
     def receive_block_from_miner(self, received_block):
         self.received_block_from_miner = copy.deepcopy(received_block)
@@ -264,6 +290,9 @@ class Device:
         else:
             # use when chain resynced
             block_to_operate = passed_in_block_to_operate
+        if block_to_operate.is_validator_block():
+            print(f"block {block_to_operate.return_block_idx()} is a validator appened block. skip global model updates for this block")
+            return
         # avg the gradients
         sum_parameters = None
         # TODO verify transaction??
@@ -309,8 +338,6 @@ class Device:
     def return_accepted_broadcasted_transactions(self):
         return self.broadcasted_transactions
 
-    def sign_block(self, mined_block):
-        mined_block.add_signature(self.sign_msg(mined_block.__dict__))
 
     def verify_transaction_by_signature(self, transaction_to_verify):
         local_updates_params = transaction_to_verify['local_updates']["local_updates_params"]
@@ -350,29 +377,6 @@ class Device:
     def toss_propagated_block(self):
         self.received_propagated_block = None
 
-    def verify_block(self, block_to_verify):
-        # check if the proof is valid(verify _block_hash).
-        if not self.check_pow_proof(block_to_verify):
-            return False
-        last_block = self.blockchain.return_last_block()
-        if last_block is not None:
-            # check if the previous_hash referred in the block and the hash of latest block in the chain match.
-            last_block_hash = last_block.compute_hash(hash_whole_block=True)
-            if block_to_verify.return_previous_hash() != last_block_hash:
-                # debug
-                #print("last_block")
-                #print(str(sorted(last_block.__dict__.items())).encode('utf-8'))
-                #print("block_to_verify")
-                #print(str(sorted(block_to_verify.__dict__.items())).encode('utf-8'))
-                #debug
-                return False
-        # All verifications done.
-        # ???When syncing by calling consensus(), rebuilt block doesn't have this field. add the block hash after verifying
-			# block_to_verify.set_hash()
-        return block_to_verify
-
-    def add_block(self, block_to_add):
-        self.blockchain.append_block(block_to_add)
 
     # def set_block_to_add(self, block_to_add):
     #     self.block_to_add = block_to_add
@@ -388,9 +392,63 @@ class Device:
         self.received_propagated_block = None
 #        self.block_to_add = None
 
+    ''' Validator '''
+    def validator_reset_vars_for_new_round(self):
+        self.accuracies_this_round = {}
+
+    def get_online_workers(self):
+        online_workers_in_peer_list = set()
+        for peer in self.peer_list:
+            if peer.is_online():
+                if peer.return_role() == "worker":
+                    online_workers_in_peer_list.add(peer)
+        if not online_workers_in_peer_list:
+            return False
+        return self.online_workers_in_peer_list
+
+    def accept_accuracy(self, worker):
+        worker_idx = worker.return_idx()
+        worker_accuracy = worker.return_accuracy_this_round()
+        # record in chain
+        self.accuracies_this_round[worker_idx] = worker_accuracy
+        # record in its own cache
+        if worker_idx in self.worker_accuracy_records.keys():
+            self.worker_accuracy_records[worker_idx].append(worker_accuracy)
+        else:
+            self.worker_accuracy_records[worker_idx] = [worker_accuracy]
+    
+    def record_worker_performance_in_block(self, validator_candidate_block, comm_round, rewards):
+        kick_out_device_set = set()
+        validation_effort_rewards = 0
+        from more_itertools import split_when
+        for worker_idx, worker_accuracy in self.worker_accuracy_records.items():
+            decreasing_accuracies = list(split_when(worker_accuracy, lambda x, y: y > x))
+            for decreasing_accuracie in decreasing_accuracies:
+                if decreasing_accuracie >= self.kick_out_rounds:
+                    kick_out_device_list.add(worker_idx)
+                    break
+            self.receive_rewards(rewards)
+            validation_effort_rewards += rewards
+        validator_candidate_block.add_validator_transaction({'round_number': comm_round, 'accuracies_this_round': self.accuracies_this_round, 'kicked_out_devices': kick_out_device_set, 'validation_effort_rewards': validation_effort_rewards})
+
+    ''' miner and validator '''
+    def sign_block(self, block_to_sign):
+        mined_block.add_signature(self.sign_msg(block_to_sign.__dict__))
+
+    ''' worker and validator '''
+    def associate_with_miner(self):
+        online_miners_in_peer_list = set()
+        for peer in self.peer_list:
+            if peer.is_online():
+                if peer.return_role() == "miner":
+                    online_miners_in_peer_list.add(peer)
+        if not online_miners_in_peer_list:
+            return False
+        self.worker_associated_miner = random.sample(online_miners_in_peer_list, 1)[0]
+        return self.worker_associated_miner
 
 class DevicesInNetwork(object):
-    def __init__(self, data_set_name, is_iid, batch_size, loss_func, opti, num_devices, network_stability, net, dev):
+    def __init__(self, data_set_name, is_iid, batch_size, loss_func, opti, num_devices, network_stability, net, dev, kick_out_rounds):
         self.data_set_name = data_set_name
         self.is_iid = is_iid
         self.batch_size = batch_size
@@ -400,6 +458,7 @@ class DevicesInNetwork(object):
         self.net = net
         self.dev = dev
         self.devices_set = {}
+        self.kick_out_rounds = kick_out_rounds
         # self.test_data_loader = None
         self.default_network_stability = network_stability
         # distribute dataset
@@ -441,6 +500,6 @@ class DevicesInNetwork(object):
             local_test_label = np.argmax(local_test_label, axis=1)
             # assign data to a device and put in the devices set
             device_idx = f'device_{i+1}'
-            a_device = Device(device_idx, TensorDataset(torch.tensor(local_train_data), torch.tensor(local_train_label)), TensorDataset(torch.tensor(local_test_data), torch.tensor(local_test_label)), self.batch_size, self.loss_func, self.opti, self.default_network_stability, self.net, self.dev)
+            a_device = Device(device_idx, TensorDataset(torch.tensor(local_train_data), torch.tensor(local_train_label)), TensorDataset(torch.tensor(local_test_data), torch.tensor(local_test_label)), self.batch_size, self.loss_func, self.opti, self.default_network_stability, self.net, self.dev, self.kick_out_rounds)
             # device index starts from 1
             self.devices_set[device_idx] = a_device
