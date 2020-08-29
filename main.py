@@ -176,6 +176,10 @@ if __name__=="__main__":
             if device.online_switcher():
                 if args['verbose']:
                     print(f'{device.return_idx()} {device.return_role()} is online')
+            # debug chain length at the begining
+            chain = device.return_blockchain_object().return_chain_structure()
+            print(f"{device.return_idx()} has chain length {len(chain)}")
+            # debug
         if not check_network_eligibility():
             print("Go to the next round.\n")
             continue
@@ -394,7 +398,7 @@ if __name__=="__main__":
                                     worker_last_block_hash[worker.return_idx()]['block_hash'] = worker.return_blockchain_object().return_last_block_hash()
                                     worker_last_block_hash[worker.return_idx()]['block_str'] = str(sorted(worker.return_blockchain_object().return_last_block().__dict__.items())).encode('utf-8')
                                     worker.toss_received_block()
-                                print("Received block from the associated miner is not valid. Pass to the next worker.")
+                                print("Received block from the associated miner is not valid or does not fit its chain. Pass to the next worker.")
                             worker.online_switcher()
                             
         if not check_network_eligibility():
