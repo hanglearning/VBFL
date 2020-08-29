@@ -174,6 +174,7 @@ class Device:
         return True
 
     def pow_resync_chain(self):
+        curr_chain_length = self.return_blockchain_object().return_chain_length()
         longest_chain = None
         for peer in self.peer_list:
             if peer.is_online():
@@ -185,8 +186,10 @@ class Device:
                         curr_chain_len = peer_chain.return_chain_length()
                         longest_chain = peer_chain
         if longest_chain:
+            longest_chain_length = longest_chain.return_chain_length()
             self.blockchain.replace_chain(longest_chain.return_chain_structure())
             print(f"{self.return_idx()} chain resynced")
+            return longest_chain_length - curr_chain_length
 
     def receive_rewards(self, rewards):
         self.rewards += rewards
@@ -240,10 +243,6 @@ class Device:
 
     def return_received_block_from_miner(self):
         return self.received_block_from_miner
-
-    def global_update(self, num_participants, sum_parameters):
-        for var in self.global_parameters:
-            self.global_parameters[var] = (sum_parameters[var] / num_participants)
     
     def evaluate_updated_weights(self):
         with torch.no_grad():
@@ -259,6 +258,32 @@ class Device:
                 num += 1
             return sum_accu / num
 
+    def global_update(self, passed_in_block_to_operate=None):
+        if not passed_in_block_to_operate:
+            block_to_operate = self.blockchain.return_last_block()
+        else:
+            # use when chain resynced
+            block_to_operate = passed_in_block_to_operate
+        # avg the gradients
+        sum_parameters = None
+        # TODO verify transaction??
+        transactions = block_to_operate.return_transactions()
+        for transaction in transactions:
+            local_updates_params = copy.deepcopy(transaction['local_updates']['local_updates_params'])
+            if sum_parameters is None:
+                sum_parameters = local_updates_params
+            else:
+                for var in sum_parameters:
+                    sum_parameters[var] += local_updates_params[var]
+        num_participants = len(transactions)
+        for var in self.global_parameters:
+            self.global_parameters[var] = (sum_parameters[var] / num_participants)
+        print(f"global updates done by block {block_to_operate.return_block_idx()}")
+
+    def update_model_after_chain_resync(self, chain_len_diff):
+        for block in self.return_blockchain_object().return_chain_structure()[-chain_len_diff:]:
+            self.global_update(passed_in_block_to_operate=block)
+    
     ''' miner '''
     def add_worker_to_association(self, worker_device):
         self.associated_worker_set.add(worker_device)

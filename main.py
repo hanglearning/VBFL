@@ -213,7 +213,9 @@ if __name__=="__main__":
                         print("No devices found in the network online in this communication round.")
                         break
                 # PoW resync chain
-                worker.pow_resync_chain()
+                chain_length_difference = worker.pow_resync_chain()
+                if chain_length_difference:
+                    worker.update_model_after_chain_resync(chain_length_difference)
                 # worker perform local update
                 print(f"This is {worker.return_idx()} - worker {worker_iter+1}/{len(workers_this_round)} performing local updates...")
                 worker.worker_local_update()
@@ -408,19 +410,7 @@ if __name__=="__main__":
         for worker in workers_this_round:
             if worker.is_online():
                 if worker.return_received_block_from_miner():
-                    block_to_operate = worker.blockchain.return_last_block()
-                    # avg the gradients
-                    sum_parameters = None
-                    # TODO verify transaction??
-                    transactions = block_to_operate.return_transactions()
-                    for transaction in transactions:
-                        local_updates_params = copy.deepcopy(transaction['local_updates']['local_updates_params'])
-                        if sum_parameters is None:
-                            sum_parameters = local_updates_params
-                        else:
-                            for var in sum_parameters:
-                                sum_parameters[var] += local_updates_params[var]
-                    worker.global_update(len(transactions), sum_parameters)
+                    worker.global_update()
                     accuracy = worker.evaluate_updated_weights()
                     report_msg = f'Worker {worker.return_idx()} at the communication round {comm_round+1} with chain length {worker.return_blockchain_object().return_chain_length()} has accuracy: {accuracy}\n'
                     print(report_msg)
