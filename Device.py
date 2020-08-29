@@ -213,7 +213,7 @@ class Device:
         self.local_train_parameters = self.net.state_dict()
 
     def return_local_updates_and_signature(self):
-        return {"local_updates_params": self.local_train_parameters, "signature": self.sign_updates()}
+        return {"local_updates_params": copy.deepcopy(self.local_train_parameters), "signature": self.sign_updates()}
 
     def associate_with_miner(self):
         online_miners_in_peer_list = set()

@@ -7,6 +7,7 @@ import argparse
 import numpy as np
 import random
 import time
+import copy
 import torch
 import torch.nn.functional as F
 from torch import optim
@@ -345,18 +346,23 @@ if __name__=="__main__":
                 # miner.set_block_to_add(block_to_propagate)
                 miner.receive_propagated_block(block_to_propagate)
                 verified_block = miner.verify_block(miner.return_propagated_block())
+                last_block_hash[miner.return_idx()] = {}
                 if verified_block:
-                    last_block_hash[miner.return_idx()]['block_idx'] = miner.return_blockchain_object().return_last_block().return_block_idx()
-                    last_block_hash[miner.return_idx()]['block_hash'] = miner.return_blockchain_object().return_last_block_hash()
+                    if verified_block.return_block_idx() != 1:
+                        last_block_hash[miner.return_idx()]['block_idx'] = miner.return_blockchain_object().return_last_block().return_block_idx()
+                        last_block_hash[miner.return_idx()]['block_hash'] = miner.return_blockchain_object().return_last_block_hash()
+                        last_block_hash[miner.return_idx()]['block_str'] = str(sorted(miner.return_blockchain_object().return_last_block().__dict__.items())).encode('utf-8')
                     miner.add_block(verified_block)
                     debug_propagated_block_list.append(True)
                     pass
                 else:
-                    last_block_hash[miner.return_idx()]['block_idx'] = miner.return_blockchain_object().return_last_block().return_block_idx()
-                    last_block_hash[miner.return_idx()]['block_hash'] = miner.return_blockchain_object().return_last_block_hash()
-                    debug_propagated_block_list.append(False)
-                    miner.verify_block(miner.return_propagated_block())
-                    miner.toss_propagated_block()
+                    if block_to_propagate.return_block_idx() != 1:
+                        last_block_hash[miner.return_idx()]['block_idx'] = miner.return_blockchain_object().return_last_block().return_block_idx()
+                        last_block_hash[miner.return_idx()]['block_hash'] = miner.return_blockchain_object().return_last_block_hash()
+                        last_block_hash[miner.return_idx()]['block_str'] = str(sorted(miner.return_blockchain_object().return_last_block().__dict__.items())).encode('utf-8')
+                        debug_propagated_block_list.append(False)
+                        miner.verify_block(miner.return_propagated_block())
+                        miner.toss_propagated_block()
                     print("Received propagated block is either invalid or does not fit this chain. In real implementation, the miners may continue to mine the block. In here, we just simply pass to the next miner. We can assume at least one miner will receive a valid block in this analysis model.")
                 # may go offline
                 miner.online_switcher()
@@ -371,17 +377,23 @@ if __name__=="__main__":
                 if miner.return_propagated_block(): # TODO
                     for worker in miner.return_associated_workers():
                         if worker.is_online():
+                            worker_last_block_hash[worker.return_idx()] = {}
                             worker.receive_block_from_miner(block_to_send)
                             verified_block = worker.verify_block(worker.return_received_block_from_miner())
                             if verified_block:
-                                worker_last_block_hash[worker.return_idx()]['block_idx'] = worker.return_blockchain_object().return_last_block().return_block_idx()
-                                worker_last_block_hash[worker.return_idx()]['block_hash'] = worker.return_blockchain_object().return_last_block_hash()
+                                if verified_block.return_block_idx() != 1:
+                                    worker_last_block_hash[worker.return_idx()]['block_idx'] = worker.return_blockchain_object().return_last_block().return_block_idx()
+                                    worker_last_block_hash[worker.return_idx()]['block_hash'] = worker.return_blockchain_object().return_last_block_hash()
+                                    worker_last_block_hash[worker.return_idx()]['block_str'] = str(sorted(worker.return_blockchain_object().return_last_block().__dict__.items())).encode('utf-8')
                                 worker.add_block(verified_block)
                                 pass
                             else:
-                                worker_last_block_hash[worker.return_idx()]['block_idx'] = worker.return_blockchain_object().return_last_block().return_block_idx()
-                                worker_last_block_hash[worker.return_idx()]['block_hash'] = worker.return_blockchain_object().return_last_block_hash()
-                                worker.toss_received_block()
+                                if block_to_send.return_block_idx() != 1:
+                                    worker.verify_block(worker.return_received_block_from_miner())
+                                    worker_last_block_hash[worker.return_idx()]['block_idx'] = worker.return_blockchain_object().return_last_block().return_block_idx()
+                                    worker_last_block_hash[worker.return_idx()]['block_hash'] = worker.return_blockchain_object().return_last_block_hash()
+                                    worker_last_block_hash[worker.return_idx()]['block_str'] = str(sorted(worker.return_blockchain_object().return_last_block().__dict__.items())).encode('utf-8')
+                                    worker.toss_received_block()
                                 print("Received block from the associated miner is not valid. Pass to the next worker.")
                             worker.online_switcher()
                             
@@ -398,7 +410,7 @@ if __name__=="__main__":
                     # TODO verify transaction??
                     transactions = block_to_operate.return_transactions()
                     for transaction in transactions:
-                        local_updates_params = transaction['local_updates']['local_updates_params']
+                        local_updates_params = copy.deepcopy(transaction['local_updates']['local_updates_params'])
                         if sum_parameters is None:
                             sum_parameters = local_updates_params
                         else:
