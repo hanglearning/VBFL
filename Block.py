@@ -9,17 +9,17 @@ class Block:
         self._previous_hash = previous_hash
         self._transactions = transactions or []
         self._nonce = nonce
-        # the hash of the current block, calculated by compute_hash
-        self._block_hash = block_hash
-        self._signature = signature
-        # miner specific
-        self._mined_by = mined_by
-        self._mining_rewards = mining_rewards
         # validator specific
         self._is_validator_block = is_validator_block
         self._validated_by = validated_by
         self._validating_rewards = validating_rewards
-        self._validator_transactions = validator_transactions or []
+        # miner and validator
+        self._mined_by = mined_by
+        self._mining_rewards = mining_rewards
+        # the hash of the current block, calculated by compute_hash
+        self._block_hash = block_hash
+        self._signature = signature
+        # self._validator_transactions = validator_transactions or []
 
     # compute_hash() also used to return value for block verification
     # if False by default, used for pow and verification, in which block_hash has to be None, because at this moment -
@@ -51,9 +51,6 @@ class Block:
     def return_block_idx(self):
         return self._idx
 
-    def return_transactions(self):
-        # return the updates from this block
-        return self._transactions
     
     def return_pow_proof(self):
         return self._block_hash
@@ -75,21 +72,33 @@ class Block:
 
     def set_mined_by(self, mined_by):
         self._mined_by = mined_by
+    
+    def return_mined_by(self):
+        return self._mined_by
 
     def add_signature(self, signature):
         # signed by mined_by node
         self._signature = signature
 
-    def set_mining_rewards(self, mining_rewards):
-        self._mining_rewards = mining_rewards
+    def return_signature(self):
+        return self._signature
 
     ''' Validator Specific '''
     def is_validator_block(self):
         return self._is_validator_block
 
     def add_validator_transaction(self, validator_transaction):
-        self._validator_transactions.append(validator_transaction)
+        self._transactions.append(validator_transaction)
 
-            
+    ''' Miner and Validator '''
+    def set_mining_rewards(self, mining_rewards):
+        self._mining_rewards = mining_rewards
+
+    def return_mining_rewards(self):
+        self._mining_rewards = mining_rewards
+    
+    def return_transactions(self):
+        # return the updates or validator's transactions from this block
+        return self._transactions
 
     

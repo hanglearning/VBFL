@@ -221,9 +221,9 @@ if __name__=="__main__":
                         print("No devices found in the network online in this communication round.")
                         break
                 # PoW resync chain
-                chain_length_difference = worker.pow_resync_chain()
-                if chain_length_difference:
-                    worker.update_model_after_chain_resync(chain_length_difference)
+                chain_diff_at_index = worker.pow_resync_chain()
+                if chain_diff_at_index:
+                    worker.update_model_after_chain_resync(chain_diff_at_index)
                 # worker perform local update
                 print(f"This is {worker.return_idx()} - worker {worker_iter+1}/{len(workers_this_round)} performing local updates...")
                 worker.worker_local_update(args["general_rewards"])
@@ -232,13 +232,17 @@ if __name__=="__main__":
                 if not associated_miner:
                     print(f"Cannot find a miner in {worker.return_idx()} peer list.")
                     continue
-                if associated_miner.is_online():
-                    # but I have made sure it is online in associate_with_miner() to ease the programming at this moment
-                    associated_miner.add_worker_to_association(worker)
-                else:
+                finally_no_associated_miner = False
+                while not associated_miner.is_online():
                     worker.remove_peers(associated_miner_idx)
-                    # TODO
-                    #reassign a miner
+                    associated_miner = worker.associate_with_miner()
+                    if not associated_miner:
+                        finally_no_associated_miner = True
+                if no_associated_miner:
+                    print(f"Cannot find a miner in {worker.return_idx()} peer list.")
+                    continue
+                # only if it is not in the black list
+                associated_miner.add_worker_to_association(worker)
                 # may go offline during model updates transmission
                 worker.online_switcher() 
         
@@ -257,7 +261,9 @@ if __name__=="__main__":
                         print("No devices found in the network online in this communication round.")
                         break
                 # PoW resync chain
-                miner.pow_resync_chain()
+                chain_diff_at_index = miner.pow_resync_chain()
+                if chain_diff_at_index:
+                    miner.update_model_after_chain_resync(chain_diff_at_index)
                 # miner accepts local updates from its workers association
                 print(f"This is {miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} accepting workers' updates...")
                 potential_offline_workers = set()
@@ -294,7 +300,7 @@ if __name__=="__main__":
             if miner.is_online():
                 if miner.return_associated_workers():
                     # block index starts from 1
-                    candidate_block = Block(idx=miner.blockchain.return_chain_length()+1, previous_hash=miner.blockchain.return_last_block_hash())
+                    candidate_block = Block(idx=miner.blockchain.return_chain_length()+1)
                     start_time = time.time()
                     # self verification
                     for unconfirmmed_transaction in miner.return_unconfirmmed_transactions():
@@ -335,7 +341,8 @@ if __name__=="__main__":
                         except:
                             block_generation_time_spent[miner] = float('inf')
                         mined_block.set_mining_rewards(args["general_rewards"])
-                        miner.receive_rewards(args["general_rewards"])
+                        # only the winning miner wins rewards
+                        # miner.receive_rewards(args["general_rewards"])
                         # sign the block
                         miner.sign_block(mined_block)
                         miner.set_mined_block(mined_block)
@@ -349,10 +356,25 @@ if __name__=="__main__":
         except:
             print("No block is generated in this round. Skip to the next round.")
             continue
+        
         block_to_propagate = winning_miner.return_mined_block()
+        # winning miner receives mining rewards
+        winning_miner.receive_rewards(block_to_propagate.return_mining_rewards())
+        # IN REALITY, FORK MAY HAPPEN AT THIS MOMENT
+        # winning miner adds this block to its own chain
+        winning_miner.add_block(block_to_propagate)
         print(f"Winning miner {winning_miner.return_idx()} will propagate its block.")
 
-        # miner propogate the winning block (just let other miners receive it, verify it and add to the blockchain)
+        # miner propogate the winning block (just let other miners in its peer list receive it, verify it and add to the blockchain)
+        # update peer list
+        if not winning_miner.update_peer_list():
+            # peer_list_empty, randomly register with an online node
+            if not register_in_the_network(winning_miner, check_online=True):
+                print("No devices found in the network online in the peer list of winning miner. Propogated block ")
+                continue
+        # miners_this_round will be updated to the miners in the peer list of the winnning miner
+        miners_this_round = winning_miner.return_only_miners_in_peer_list()
+
         debug_propagated_block_list = []
         last_block_hash = {}
         for miner in miners_this_round:
@@ -415,7 +437,7 @@ if __name__=="__main__":
             print("Go to the next round.\n")
             continue
         
-        # miner requests worker to download block and do global updates
+        # workers do global updates
         for worker in workers_this_round:
             if worker.is_online():
                 if worker.return_received_block_from_miner():
@@ -435,33 +457,73 @@ if __name__=="__main__":
         # TODO validator may also be evil. how to validate validators?
         # workers send their accuracies to validators and validators record the accuracies in a block
         # iterating validator is easier than iterating worker because of the creation of the validator block
+        block_generation_time_spent = {}
         for validator in validators_this_round:
             if validator.is_online():
-                # pow sync chain
-                validator.pow_resync_chain()
+                # update peer list
+                if not validator.update_peer_list():
+                    # peer_list_empty, randomly register with an online node
+                    if not register_in_the_network(validator, check_online=True):
+                        print("No devices found in the network online in this communication round.")
+                        break
+                # PoW resync chain
+                chain_diff_at_index = validator.pow_resync_chain()
+                if chain_diff_at_index:
+                    validator.update_model_after_chain_resync(chain_diff_at_index)
                 last_block_on_validator_chain = validator.return_blockchain_object().return_last_block()
                 # check last block
                 if last_block_on_validator_chain==None or last_block_on_validator_chain.is_validator_block():
-                    print("last block ineligible to be appended")
+                    print("last block ineligible to be operated")
                     continue
                 online_workers_in_peer_list = validator.get_online_workers()
                 if not online_workers_in_peer_list:
                     print(f"Cannot find online workers in {worker.return_idx()} peer list.")
                     continue
-                validator_candidate_block = Block(idx=validator.blockchain.return_chain_length()+1, previous_hash=validator.blockchain.return_last_block_hash(), is_validator_block=True)
-                for validator in online_validators_in_peer_list:
+                validator_candidate_block = Block(idx=validator.blockchain.return_chain_length()+1, is_validator_block=True)
+                for worker in online_workers_in_peer_list:
                     smart_contract_worker_upload_accuracy_to_validator(worker, validator)
                 validator.record_worker_performance_in_block(validator_candidate_block, comm_round, args["general_rewards"])
-                validator.sign_block(validator_candidate_block)
-                # associate miner
+                # validator mines its own block
+                # originally thinking letting miner mine the block. However, in this way, validator may lean on being malicious as they don't have to "pay" for their malicious info. So we let validator mines its own block, and give itself record
+                start_time = time.time()
+                if validator_candidate_block.return_transactions():
+                    # set previous_hash
+                    validator_candidate_block.set_previous_hash(validator.blockchain.return_last_block().compute_hash(hash_whole_block=True))
+                    mined_block = miner.proof_of_work(validator_candidate_block)
+                else:
+                    print(f"The validator {validator.return_idx()} did not receive any accuracies this round.")
+                    continue
+                # unfortunately may go offline
                 if validator.online_switcher():
-                    associated_miner = validator.associate_with_miner()
-                    if not associated_miner:
-                        print(f"Cannot find a miner in {validator.return_idx()} peer list.")
-                        continue
-                    # TODO
-                    validator.
-                    # miner only mines the first accepted validator's block
+                    # record mining time
+                    try:
+                        block_generation_time_spent[validator] = (time.time() - start_time)/(validator.return_computation_power())
+                    except:
+                        block_generation_time_spent[validator] = float('inf')
+                    mined_block.set_mining_rewards(args["general_rewards"])
+                    validator.sign_block(validator_candidate_block)
+                    validator.set_mined_block(mined_block)
+            
+        # select the winning validator and broadcast its mined block
+        try:
+            winning_validator = min(block_generation_time_spent.keys(), key=(lambda miner: block_generation_time_spent[validator]))
+        except:
+            print("No validator block is generated in this round. Skip to the next round.")
+            continue
+        
+        block_to_propagate = winning_validator.return_mined_block()
+        # winning validator receives mining rewards
+        winning_validator.receive_rewards(block_to_propagate.return_mining_rewards())
+        winning_validator.add_block(block_to_propagate)
+        print(f"Winning validator {winning_validator.return_idx()} will propagate its block.")
+
+        # validator propagates the winning block
+        # validator's role is very important. previously thinking let other validators in its peer list receives and verifies it, but what if other validators being malicious refuses to receive it? Or, they just can't refuse receiving?
+        # actually it should be fine. This winning validator has already appended its own block so other nodes will sync up the next round
+
+
+
+
 
                 
 
