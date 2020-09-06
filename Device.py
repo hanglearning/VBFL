@@ -45,12 +45,16 @@ class Device:
         self.generate_rsa_key()
         # a flag to phase out this device for a certain comm round(simulation friendly)
         # self.phased_out = False
+        # for validation purpose
         self.black_list = set()
+        self.kick_out_rounds = kick_out_rounds
+        self.worker_accuracy_records = {}
         ''' For workers '''
         self.received_block_from_miner = None
         self.accuracy_this_round = None
         ''' For miners '''
         self.associated_worker_set = set()
+        self.associated_validator_set = set()
         # dict cannot be added to set()
         self.unconfirmmed_transactions = None or []
         self.broadcasted_transactions = None or []
@@ -58,9 +62,9 @@ class Device:
         self.received_propagated_block = None
         # self.block_to_add = None
         ''' For validators '''
-        self.kick_out_rounds = kick_out_rounds
+        self.validation_rewards_this_round = 0
         self.accuracies_this_round = {}
-        self.worker_accuracy_records = {}
+        
         
 
     ''' Common Methods '''
@@ -202,10 +206,9 @@ class Device:
             for block_iter in range(len(chain_structure_before_replace)):
                 if chain_structure_before_replace[block_iter].compute_hash(hash_whole_block=True) != longest_chain_structure[block_iter].compute_hash(hash_whole_block=True):
                     break
-            longest_chain_length = longest_chain.return_chain_length()
-            self.blockchain.replace_chain(longest_chain_structure)
+            self.return_blockchain_object().replace_chain(longest_chain_structure)
             print(f"{self.return_idx()} chain resynced")
-            return longest_chain_length - curr_chain_length
+            return block_iter
 
     def receive_rewards(self, rewards):
         self.rewards += rewards
@@ -253,9 +256,8 @@ class Device:
         # add malicious devices to the black list
         self.black_list.update(kicked_out_devices)
 
-    def update_model_after_chain_resync(self, chain_len_diff):
-
-        for block in self.return_blockchain_object().return_chain_structure()[-chain_len_diff:]:
+    def update_model_after_chain_resync(self, chain_diff_at_index):
+        for block in self.return_blockchain_object().return_chain_structure()[chain_diff_at_index:]:
             if not block.is_validator_block():
                 self.global_update(passed_in_block_to_operate=block)
             else:
@@ -350,6 +352,10 @@ class Device:
         if not worker_device.return_idx() in self.black_list:
             self.associated_worker_set.add(worker_device)
 
+    def add_validator_to_association(self, validator_device):
+        if not validator_device.return_idx() in self.black_list:
+            self.associated_validator_set.add(validator_device)
+
     def return_associated_workers(self):
         return self.associated_worker_set
     
@@ -423,6 +429,7 @@ class Device:
     
     def miner_reset_vars_for_new_round(self):
         self.associated_worker_set.clear()
+        self.associated_validator_set.clear()
         self.unconfirmmed_transactions.clear()
         self.broadcasted_transactions.clear()
         self.mined_block = None
@@ -431,6 +438,7 @@ class Device:
 
     ''' Validator '''
     def validator_reset_vars_for_new_round(self):
+        self.validation_rewards_this_round = 0
         self.accuracies_this_round = {}
 
     def get_online_workers(self):
@@ -443,30 +451,47 @@ class Device:
             return False
         return self.online_workers_in_peer_list
 
-    def accept_accuracy(self, worker):
+    def accept_accuracy(self, worker, effort_rewards):
         worker_idx = worker.return_idx()
         worker_accuracy = worker.return_accuracy_this_round()
-        # record in chain
+        # record in block
         self.accuracies_this_round[worker_idx] = worker_accuracy
+        self.receive_rewards(effort_rewards)
         # record in its own cache
-        if worker_idx in self.worker_accuracy_records.keys():
-            self.worker_accuracy_records[worker_idx].append(worker_accuracy)
-        else:
-            self.worker_accuracy_records[worker_idx] = [worker_accuracy]
+        # if worker_idx in self.worker_accuracy_records.keys():
+        #     self.worker_accuracy_records[worker_idx].append(worker_accuracy)
+        #     self.receive_rewards(effort_rewards)
+        # else:
+        #     self.worker_accuracy_records[worker_idx] = [worker_accuracy]
+        #     self.receive_rewards(effort_rewards)
     
-    def record_worker_performance_in_block(self, validator_candidate_block, comm_round, rewards):
-        kick_out_device_set = set()
-        validation_effort_rewards = 0
-        from more_itertools import split_when
-        for worker_idx, worker_accuracy in self.worker_accuracy_records.items():
-            decreasing_accuracies = list(split_when(worker_accuracy, lambda x, y: y > x))
-            for decreasing_accuracie in decreasing_accuracies:
-                if decreasing_accuracie >= self.kick_out_rounds:
-                    kick_out_device_list.add(worker_idx)
-                    break
-            self.receive_rewards(rewards)
-            validation_effort_rewards += rewards
-        validator_candidate_block.add_validator_transaction({'validator_idx': self.return_idx(), 'round_number': comm_round, 'accuracies_this_round': self.accuracies_this_round, 'kicked_out_devices': kick_out_device_set, 'validation_effort_rewards': validation_effort_rewards})
+    # def record_worker_performance_in_block(self, validator_candidate_block, comm_round, rewards):
+    #     kick_out_device_set = set()
+    #     validation_effort_rewards = 0
+    #     from more_itertools import split_when
+    #     for worker_idx, worker_accuracy in self.worker_accuracy_records.items():
+    #         decreasing_accuracies = list(split_when(worker_accuracy, lambda x, y: y > x))
+    #         for decreasing_accuracie in decreasing_accuracies:
+    #             if decreasing_accuracie >= self.kick_out_rounds:
+    #                 kick_out_device_list.add(worker_idx)
+    #                 break
+    #         self.receive_rewards(rewards)
+    #         validation_effort_rewards += rewards
+    #     validator_candidate_block.add_validator_transaction({'validator_idx': self.return_idx(), 'round_number': comm_round, 'accuracies_this_round': self.accuracies_this_round, 'kicked_out_devices': kick_out_device_set, 'validation_effort_rewards': validation_effort_rewards})
+
+    def build_validation_transaction(self, validator_candidate_block, comm_round, rewards):
+        #kick_out_device_set = set()
+        #validation_effort_rewards = 0
+        # from more_itertools import split_when
+        # for worker_idx, worker_accuracy in self.worker_accuracy_records.items():
+        #     decreasing_accuracies = list(split_when(worker_accuracy, lambda x, y: y > x))
+        #     for decreasing_accuracie in decreasing_accuracies:
+        #         if decreasing_accuracie >= self.kick_out_rounds:
+        #             kick_out_device_list.add(worker_idx)
+        #             break
+        #     self.receive_rewards(rewards)
+        #     validation_effort_rewards += rewards
+        return {'validator_idx': self.return_idx(), 'round_number': comm_round, 'accuracies_this_round': copy.deepcopy(self.accuracies_this_round), 'validation_effort_rewards': self.validation_rewards_this_round}
 
     ''' miner and validator '''
     def sign_block(self, block_to_sign):

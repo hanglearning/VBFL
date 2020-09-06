@@ -34,7 +34,7 @@ parser.add_argument('-v', '--verbose', type=int, default=0, help='print verbose 
 parser.add_argument('-ko', '--kick_out_rounds', type=int, default=0, help='a device is kicked out of the network if its accuracy shows decreasing for the number of rounds recorded by a winning validator')
 
 def smart_contract_worker_upload_accuracy_to_validator(worker, validator):
-    validator.accept_accuracy(worker)
+    validator.accept_accuracy(worker, args["general_rewards"])
 
 
 def debug_chain_sync():
@@ -360,7 +360,9 @@ if __name__=="__main__":
         block_to_propagate = winning_miner.return_mined_block()
         # winning miner receives mining rewards
         winning_miner.receive_rewards(block_to_propagate.return_mining_rewards())
+        # IGNORE SUBNETS, where propagated block will be tossed
         # IN REALITY, FORK MAY HAPPEN AT THIS MOMENT
+        # actually, in this system fork can still happen - two nodes have the same length of different chain for their peers in different network group to sync. But they will eventually catch up
         # winning miner adds this block to its own chain
         winning_miner.add_block(block_to_propagate)
         print(f"Winning miner {winning_miner.return_idx()} will propagate its block.")
@@ -455,6 +457,8 @@ if __name__=="__main__":
             continue
         
         # TODO validator may also be evil. how to validate validators?
+        # or maybe in this specific settings, since devices take turns to become validators and not specifically set to some certain memvbers, we believe most of the members in the system want to benefit the whole community and trust validators by default
+        # after all, they are still taking chances to send their validations to the miners
         # workers send their accuracies to validators and validators record the accuracies in a block
         # iterating validator is easier than iterating worker because of the creation of the validator block
         block_generation_time_spent = {}
@@ -479,12 +483,32 @@ if __name__=="__main__":
                 if not online_workers_in_peer_list:
                     print(f"Cannot find online workers in {worker.return_idx()} peer list.")
                     continue
-                validator_candidate_block = Block(idx=validator.blockchain.return_chain_length()+1, is_validator_block=True)
+
+                # validator_candidate_block = Block(idx=validator.blockchain.return_chain_length()+1, is_validator_block=True)
                 for worker in online_workers_in_peer_list:
                     smart_contract_worker_upload_accuracy_to_validator(worker, validator)
                 validator.record_worker_performance_in_block(validator_candidate_block, comm_round, args["general_rewards"])
+                # associate with a miner and broadcast its block
+                associated_miner = validator.associate_with_miner()
+                if not associated_miner:
+                    print(f"Cannot find a miner in {worker.return_idx()} peer list.")
+                    continue
+                finally_no_associated_miner = False
+                while not associated_miner.is_online():
+                    validator.remove_peers(associated_miner_idx)
+                    associated_miner = validator.associate_with_miner()
+                    if not associated_miner:
+                        finally_no_associated_miner = True
+                if no_associated_miner:
+                    print(f"Cannot find a miner in {validator.return_idx()} peer list.")
+                    continue
+                # only if it is not in the black list
+                associated_miner.add_validator_to_association(validator)
+                # may go offline during model updates transmission
+                worker.online_switcher() 
                 # validator mines its own block
                 # originally thinking letting miner mine the block. However, in this way, validator may lean on being malicious as they don't have to "pay" for their malicious info. So we let validator mines its own block, and give itself record
+                # not good, malicious validator gets good GPU and always mark evilly. STILL SEND TO MINER
                 start_time = time.time()
                 if validator_candidate_block.return_transactions():
                     # set previous_hash
@@ -520,6 +544,10 @@ if __name__=="__main__":
         # validator propagates the winning block
         # validator's role is very important. previously thinking let other validators in its peer list receives and verifies it, but what if other validators being malicious refuses to receive it? Or, they just can't refuse receiving?
         # actually it should be fine. This winning validator has already appended its own block so other nodes will sync up the next round
+        # wait, it may still be bad since bad validators do also want to record their bad data. So propagate to its miners in the peer list
+        # wait, no, once propagate, they all must accept. Still may need the miners mine, because the benefits of other validators are mutually affected
+
+
 
 
 
