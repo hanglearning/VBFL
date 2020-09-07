@@ -52,7 +52,6 @@ class Device:
         self.kick_out_rounds = kick_out_rounds
         self.worker_accuracy_records = {}
         self.has_added_block = False
-        self.acc
         ''' For workers '''
         self.local_updates_rewards = 0
         self.received_block_from_miner = None
@@ -85,13 +84,12 @@ class Device:
         self.public_key = keyPair.e
     
     def return_rsa_pub_key(self):
-        return {"modulus": modulus, "public_key": public_key}
+        return {"modulus": self.modulus, "pub_key": self.public_key}
     
     def sign_msg(self, msg):
         hash = int.from_bytes(sha256(str(msg).encode('utf-8')).digest(), byteorder='big')
         # pow() is python built-in modular exponentiation function
         signature = pow(hash, self.private_key, self.modulus)
-        signature = {"pub_key": self.public_key, "modulus": self.modulus, "signature": signature}
         return signature
 
     def init_global_parameters(self):
@@ -136,8 +134,7 @@ class Device:
         return self.on_line
 
     def is_back_online(self):
-        back_online = True if self.old_status == False and self.old_status != self.on_line
-        return back_online
+        return self.old_status == False and self.old_status != self.on_line
 
     def is_online(self):
         return self.on_line
@@ -167,9 +164,11 @@ class Device:
         # remove itself from the peer_list if there is
         self.remove_peers(self)
         # remove malicious peers
+        potential_malicious_peer_set = set()
         for peer in self.peer_list:
             if peer.return_idx() in self.black_list:
-                self.remove_peers(peer)
+                potential_malicious_peer_set.add(peer)
+        self.remove_peers(potential_malicious_peer_set)
         # if peer_list ends up empty, randomly register with another device
         return False if not self.peer_list else True
 
@@ -190,17 +189,17 @@ class Device:
         else:
             chain_to_check = chain_to_check.return_chain_structure()
             for block in chain_to_check[1:]:
-                if self.check_pow_proof(block) and block.return_previous_hash() == chain_to_check[chain_to_check.index(block) - 1].compute_hash(hash_whole_block=True):
+                if self.check_pow_proof(block) and block.return_previous_block_hash() == chain_to_check[chain_to_check.index(block) - 1].compute_hash(hash_entire_block=True):
                     pass
                 else:
                     # if not self.check_pow_proof(block):
                     #     print("block_to_check string")
                     #     print(str(sorted(block.__dict__.items())).encode('utf-8'))
 
-                    # print(block.return_previous_hash() == chain_to_check[chain_to_check.index(block) - 1].compute_hash(hash_whole_block=True))
+                    # print(block.return_previous_block_hash() == chain_to_check[chain_to_check.index(block) - 1].compute_hash(hash_entire_block=True))
                     # print(f"index {chain_to_check.index(block) - 1}")
-                    # print("pre", block.return_previous_hash())
-                    # print(chain_to_check[chain_to_check.index(block) - 1].compute_hash(hash_whole_block=True))
+                    # print("pre", block.return_previous_block_hash())
+                    # print(chain_to_check[chain_to_check.index(block) - 1].compute_hash(hash_entire_block=True))
                     return False
         return True
 
@@ -221,7 +220,7 @@ class Device:
             # need machenism to reverse updates by # of blocks
             # chain_structure_before_replace = self.return_blockchain_object().return_chain_structure()
             # for block_iter in range(len(chain_structure_before_replace)):
-            #     if chain_structure_before_replace[block_iter].compute_hash(hash_whole_block=True) != longest_chain_structure[block_iter].compute_hash(hash_whole_block=True):
+            #     if chain_structure_before_replace[block_iter].compute_hash(hash_entire_block=True) != longest_chain_structure[block_iter].compute_hash(hash_entire_block=True):
             #         break
             self.return_blockchain_object().replace_chain(longest_chain_structure)
             print(f"{self.return_idx()} chain resynced")
@@ -255,8 +254,8 @@ class Device:
         last_block = self.return_blockchain_object().return_last_block()
         if last_block is not None:
             # check if the previous_hash referred in the block and the hash of latest block in the chain match.
-            last_block_hash = last_block.compute_hash(hash_whole_block=True)
-            if block_to_verify.return_previous_hash() != last_block_hash:
+            last_block_hash = last_block.compute_hash(hash_entire_block=True)
+            if block_to_verify.return_previous_block_hash() != last_block_hash:
                 # debug
                 #print("last_block")
                 #print(str(sorted(last_block.__dict__.items())).encode('utf-8'))
@@ -287,7 +286,7 @@ class Device:
         return self.has_added_block        
 
     def operate_on_validator_block(self, passed_in_validator_block=None):
-        if not passed_in_block_to_operate:
+        if not passed_in_validator_block:
             block_to_operate = self.return_blockchain_object().return_last_block()
         else:
             # use when chain resynced
@@ -299,20 +298,18 @@ class Device:
             accuracies_this_round = transaction['accuracies_this_round']
             for worker_idx, worker_accuracy in accuracies_this_round.items():
                 if not worker_idx in self.worker_accuracy_records.keys():
-                    worker_accuracy_records[worker_idx] = []
-                worker_accuracy_records[worker_idx].append(accuracy)
+                    self.worker_accuracy_records[worker_idx] = []
+                self.worker_accuracy_records[worker_idx].append(worker_accuracy)
         # check and add to black_list
         from more_itertools import split_when
         for worker_idx, worker_accuracy in self.worker_accuracy_records.items():
-            decreasing_accuracies = list(split_when(worker_accuracy, lambda x, y: y > x))
-            for decreasing_accuracie in decreasing_accuracies:
-                if decreasing_accuracie >= self.kick_out_rounds:
-                    self.black_list.add(worker_idx)
-                    break
-            
-        kicked_out_devices = transaction['transaction']
-        # add malicious devices to the black list
-        self.black_list.update(kicked_out_devices)
+            if not worker_idx in self.black_list:
+                decreasing_accuracies = list(split_when(worker_accuracy, lambda x, y: y > x))
+                for decreasing_accuracie in decreasing_accuracies:
+                    if len(decreasing_accuracie) >= self.kick_out_rounds:
+                        self.black_list.add(worker_idx)
+                        break
+                        # add malicious devices to the black list
 
     # def update_model_after_chain_resync(self, chain_diff_at_index):
     #     for block in self.return_blockchain_object().return_chain_structure()[chain_diff_at_index:]:
@@ -413,6 +410,9 @@ class Device:
             else:
                 for var in sum_parameters:
                     sum_parameters[var] += local_updates_params[var]
+        if not sum_parameters:
+            # seems all transactions are from malicious nodes
+            return
         num_participants = len(transactions)
         for var in self.global_parameters:
             self.global_parameters[var] = (sum_parameters[var] / num_participants)
@@ -482,7 +482,7 @@ class Device:
         pub_key = transaction_to_verify['rsa_pub_key']["pub_key"]
         signature = transaction_to_verify["signature"]
         # verify
-        hash = int.from_bytes(sha256(str(sorted(transaction_before_signed.items()))).encode('utf-8')).digest(), byteorder='big')
+        hash = int.from_bytes(sha256(str(sorted(transaction_before_signed.items())).encode('utf-8')).digest(), byteorder='big')
         hashFromSignature = pow(signature, pub_key, modulus)
         return hash == hashFromSignature
     
@@ -503,7 +503,7 @@ class Device:
         if not received_propagated_block.return_mined_by() in self.black_list:
             self.received_propagated_block = copy.deepcopy(received_propagated_block)
 
-     def receive_propagated_validation_block(self, received_propagated_validation_block):
+    def receive_propagated_validation_block(self, received_propagated_validation_block):
         if not received_propagated_validation_block.return_mined_by() in self.black_list:
             self.received_propagated_validation_block = copy.deepcopy(received_propagated_validation_block)
     
@@ -548,13 +548,13 @@ class Device:
         self.accuracies_this_round = {}
         self.has_added_block = False
 
-    def get_online_workers(self):
+    def return_online_workers(self):
         online_workers_in_peer_list = set()
         for peer in self.peer_list:
             if peer.is_online():
                 if peer.return_role() == "worker":
                     online_workers_in_peer_list.add(peer)
-        return online_workers_in_peer_list:
+        return online_workers_in_peer_list
 
     def accept_accuracy(self, worker, effort_rewards):
         worker_idx = worker.return_idx()

@@ -4,7 +4,7 @@ import json
 from hashlib import sha256
 
 class Block:
-    def __init__(self, idx, previous_block_hash, transactions=None, nonce=0, miner_pub_key=None, mined_by=None, mining_rewards=None, is_validator_block=False, pow_proof=None, signature=None):
+    def __init__(self, idx, previous_block_hash=None, transactions=None, nonce=0, miner_pub_key=None, mined_by=None, mining_rewards=None, is_validator_block=False, pow_proof=None, signature=None):
         self._idx = idx
         self._previous_block_hash = previous_block_hash
         self._transactions = transactions or []
