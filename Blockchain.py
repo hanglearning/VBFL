@@ -22,9 +22,9 @@ class Blockchain:
             # blockchain doesn't even have its genesis block
             return None
 
-    def return_last_block_hash(self):
+    def return_last_block_pow_proof(self):
         if len(self.chain) > 0:
-            return self.return_last_block().compute_hash(hash_whole_block=True)
+            return self.return_last_block().compute_hash(hash_entire_block=True)
         else:
             return None
 

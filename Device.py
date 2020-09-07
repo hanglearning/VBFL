@@ -24,6 +24,7 @@ class Device:
         self.train_dl = None
         self.test_dl = None
         self.local_train_parameters = None
+        self.initial_net_parameters = None
         self.global_parameters = None
         # used to assign role to the device
         self.role = None
@@ -35,7 +36,7 @@ class Device:
         self.computation_power = random.randint(0, 4)
         self.peer_list = set()
         # used in cross_verification and in the PoS
-        self.on_line = False
+        self.on_line = True
         self.rewards = 0
         self.blockchain = Blockchain()
         # init key pair
@@ -46,10 +47,14 @@ class Device:
         # a flag to phase out this device for a certain comm round(simulation friendly)
         # self.phased_out = False
         # for validation purpose
+        # black_list stores device index rather than the object
         self.black_list = set()
         self.kick_out_rounds = kick_out_rounds
         self.worker_accuracy_records = {}
+        self.has_added_block = False
+        self.acc
         ''' For workers '''
+        self.local_updates_rewards = 0
         self.received_block_from_miner = None
         self.accuracy_this_round = None
         ''' For miners '''
@@ -60,11 +65,13 @@ class Device:
         self.broadcasted_transactions = None or []
         self.mined_block = None
         self.received_propagated_block = None
+        self.received_propagated_validation_block = None
         # self.block_to_add = None
         ''' For validators '''
         self.validation_rewards_this_round = 0
         self.accuracies_this_round = {}
-        
+        # self.unconfirmmed_validator_transactions = None or []
+        # self.broadcasted_validator_transactions = None or []
         
 
     ''' Common Methods '''
@@ -77,6 +84,9 @@ class Device:
         self.private_key = keyPair.d
         self.public_key = keyPair.e
     
+    def return_rsa_pub_key(self):
+        return {"modulus": modulus, "public_key": public_key}
+    
     def sign_msg(self, msg):
         hash = int.from_bytes(sha256(str(msg).encode('utf-8')).digest(), byteorder='big')
         # pow() is python built-in modular exponentiation function
@@ -85,6 +95,7 @@ class Device:
         return signature
 
     def init_global_parameters(self):
+        self.initial_net_parameters = self.net.state_dict()
         self.global_parameters = self.net.state_dict()
 
     def add_peers(self, new_peers):
@@ -116,12 +127,17 @@ class Device:
         return self.role
 
     def online_switcher(self):
+        self.old_status = self.on_line
         online_indicator = random.random()
         if online_indicator < self.network_stability:
             self.on_line = True
         else:
             self.on_line = False
         return self.on_line
+
+    def is_back_online(self):
+        back_online = True if self.old_status == False and self.old_status != self.on_line
+        return back_online
 
     def is_online(self):
         return self.on_line
@@ -202,13 +218,15 @@ class Device:
         if longest_chain:
             # compare chain difference
             longest_chain_structure = longest_chain.return_chain_structure()
-            chain_structure_before_replace = self.return_blockchain_object().return_chain_structure()
-            for block_iter in range(len(chain_structure_before_replace)):
-                if chain_structure_before_replace[block_iter].compute_hash(hash_whole_block=True) != longest_chain_structure[block_iter].compute_hash(hash_whole_block=True):
-                    break
+            # need machenism to reverse updates by # of blocks
+            # chain_structure_before_replace = self.return_blockchain_object().return_chain_structure()
+            # for block_iter in range(len(chain_structure_before_replace)):
+            #     if chain_structure_before_replace[block_iter].compute_hash(hash_whole_block=True) != longest_chain_structure[block_iter].compute_hash(hash_whole_block=True):
+            #         break
             self.return_blockchain_object().replace_chain(longest_chain_structure)
             print(f"{self.return_idx()} chain resynced")
-            return block_iter
+            #return block_iter
+            return True
 
     def receive_rewards(self, rewards):
         self.rewards += rewards
@@ -217,20 +235,24 @@ class Device:
         return self.computation_power
 
     def verify_block(self, block_to_verify):
+        if block_to_verify.return_mined_by() in self.black_list:
+            return False
         # check if the proof is valid(verify _block_hash).
         if not self.check_pow_proof(block_to_verify):
             return False
         # check if the signature is valid
-        signature_dict = block_to_verify.return_signature()
+        signature_dict = block_to_verify.return_miner_pub_key()
         modulus = signature_dict["modulus"]
         pub_key = signature_dict["pub_key"]
-        signature = signature_dict["signature"]
+        signature = block_to_verify.return_signature()
         # verify signature
-        hash = int.from_bytes(sha256(str(block_to_verify.__dict__).encode('utf-8')).digest(), byteorder='big')
+        block_to_verify_before_sign = copy.deepcopy(block_to_verify)
+        block_to_verify_before_sign.remove_signature_for_verification()
+        hash = int.from_bytes(sha256(str(block_to_verify_before_sign.__dict__).encode('utf-8')).digest(), byteorder='big')
         hashFromSignature = pow(signature, pub_key, modulus)
         if hash != hashFromSignature:
             return False
-        last_block = self.blockchain.return_last_block()
+        last_block = self.return_blockchain_object().return_last_block()
         if last_block is not None:
             # check if the previous_hash referred in the block and the hash of latest block in the chain match.
             last_block_hash = last_block.compute_hash(hash_whole_block=True)
@@ -244,24 +266,69 @@ class Device:
                 return False
         # All verifications done.
         # ???When syncing by calling consensus(), rebuilt block doesn't have this field. add the block hash after verifying
-			# block_to_verify.set_hash()
+			# block_to_verify.set_pow_proof()
         return block_to_verify
 
     def add_block(self, block_to_add):
-        self.blockchain.append_block(block_to_add)
+        if block_to_add.is_validator_block():
+            last_block_on_validator_chain = self.return_blockchain_object().return_last_block()
+            # check last block
+            if last_block_on_validator_chain == None or last_block_on_validator_chain.is_validator_block():
+                print("Validation block cannot be appended to a validation block.")
+                return False
+        self.return_blockchain_object().append_block(block_to_add)
+        self.has_added_block = True
+        return True
 
-    def operate_on_validator_block(self, validator_block):
-        transaction = validator_block.return_transactions()[0]
+    def reset_has_added_block(self):
+        self.has_added_block = False
+
+    def return_has_added_block(self):
+        return self.has_added_block        
+
+    def operate_on_validator_block(self, passed_in_validator_block=None):
+        if not passed_in_block_to_operate:
+            block_to_operate = self.return_blockchain_object().return_last_block()
+        else:
+            # use when chain resynced
+            block_to_operate = passed_in_validator_block
+        transactions = block_to_operate.return_transactions()
+        for transaction in transactions:
+            if transaction['validator_device_idx'] in self.black_list:
+                continue
+            accuracies_this_round = transaction['accuracies_this_round']
+            for worker_idx, worker_accuracy in accuracies_this_round.items():
+                if not worker_idx in self.worker_accuracy_records.keys():
+                    worker_accuracy_records[worker_idx] = []
+                worker_accuracy_records[worker_idx].append(accuracy)
+        # check and add to black_list
+        from more_itertools import split_when
+        for worker_idx, worker_accuracy in self.worker_accuracy_records.items():
+            decreasing_accuracies = list(split_when(worker_accuracy, lambda x, y: y > x))
+            for decreasing_accuracie in decreasing_accuracies:
+                if decreasing_accuracie >= self.kick_out_rounds:
+                    self.black_list.add(worker_idx)
+                    break
+            
         kicked_out_devices = transaction['transaction']
         # add malicious devices to the black list
         self.black_list.update(kicked_out_devices)
 
-    def update_model_after_chain_resync(self, chain_diff_at_index):
-        for block in self.return_blockchain_object().return_chain_structure()[chain_diff_at_index:]:
+    # def update_model_after_chain_resync(self, chain_diff_at_index):
+    #     for block in self.return_blockchain_object().return_chain_structure()[chain_diff_at_index:]:
+    #         if not block.is_validator_block():
+    #             self.global_update(passed_in_block_to_operate=block)
+    #         else:
+    #             self.operate_on_validator_block(block)
+    def update_model_after_chain_resync(self):
+        # reset global params to the initial weights of the net
+        self.global_parameters = copy.deepcopy(self.initial_net_parameters)
+        # in future version, develop efficient updating algorithm based on chain difference
+        for block in self.return_blockchain_object().return_chain_structure():
             if not block.is_validator_block():
                 self.global_update(passed_in_block_to_operate=block)
             else:
-                self.operate_on_validator_block(block)
+                self.operate_on_validator_block(passed_in_validator_block=block)
 
     ''' Worker '''
     # TODO change to computation power
@@ -278,7 +345,8 @@ class Device:
                 loss.backward()
                 self.opti.step()
                 self.opti.zero_grad()
-            self.receive_rewards(rewards)
+                self.local_updates_rewards += 1
+                self.receive_rewards(rewards)
         print("Done")
         self.local_train_parameters = self.net.state_dict()
 
@@ -288,15 +356,16 @@ class Device:
     def return_accuracy_this_round(self):
         return self.accuracy_this_round
 
-    def return_local_updates_and_signature(self):
-        return {"local_updates_params": copy.deepcopy(self.local_train_parameters), "signature": self.sign_updates()}
-    
-    def sign_updates(self):
-        return self.sign_msg(self.local_train_parameters)
+    def return_local_updates_and_signature(self, comm_round):
+        local_updates_dict = {'worker_device_idx': self.return_idx(), 'round_number': comm_round, "local_updates_params": copy.deepcopy(self.local_train_parameters), "local_updates_rewards": self.local_updates_rewards, "rsa_pub_key": self.return_rsa_pub_key()}
+        local_updates_dict["signature"] = self.sign_msg(sorted(local_updates_dict.items()))
+        return local_updates_dict
 
     def worker_reset_vars_for_new_round(self):
         self.received_block_from_miner = None
         self.accuracy_this_round = None
+        self.local_updates_rewards = 0
+        self.has_added_block = False
 
     def receive_block_from_miner(self, received_block):
         if not received_block.return_mined_by() in self.black_list:
@@ -324,7 +393,7 @@ class Device:
 
     def global_update(self, passed_in_block_to_operate=None):
         if not passed_in_block_to_operate:
-            block_to_operate = self.blockchain.return_last_block()
+            block_to_operate = self.return_blockchain_object().return_last_block()
         else:
             # use when chain resynced
             block_to_operate = passed_in_block_to_operate
@@ -336,9 +405,11 @@ class Device:
         # TODO verify transaction??
         transactions = block_to_operate.return_transactions()
         for transaction in transactions:
-            local_updates_params = copy.deepcopy(transaction['local_updates']['local_updates_params'])
+            if transaction['worker_device_idx'] in self.black_list:
+                continue
+            local_updates_params = transaction['local_updates_params']
             if sum_parameters is None:
-                sum_parameters = local_updates_params
+                sum_parameters = copy.deepcopy(local_updates_params)
             else:
                 for var in sum_parameters:
                     sum_parameters[var] += local_updates_params[var]
@@ -359,28 +430,39 @@ class Device:
     def return_associated_workers(self):
         return self.associated_worker_set
     
+    def return_associated_validators(self):
+        return self.associated_validator_set
+    
     def add_unconfirmmed_transaction(self, unconfirmmed_transaction):
         self.unconfirmmed_transactions.append(copy.deepcopy(unconfirmmed_transaction))
 
     def return_unconfirmmed_transactions(self):
         return self.unconfirmmed_transactions
 
+    # def add_unconfirmmed_validator_transactions(self, unconfirmmed_validator_transaction):
+    #     self.unconfirmmed_validator_transactions.append(copy.deepcopy(unconfirmmed_validator_transaction))
+
+    # def return_unconfirmmed_validator_transactions(self):
+    #     return self.unconfirmmed_validator_transactions
+
     def accept_broadcasted_transactions(self, source_miner_idx, broadcasted_transactions):
         # discard malicious node
         if not source_miner_idx in self.black_list:
             self.broadcasted_transactions.append(copy.deepcopy(broadcasted_transactions))
 
-    def broadcast_updates(self):
+    def broadcast_transactions(self):
         for peer in self.peer_list:
             if peer.is_online():
                 if peer.return_role() == 'miner':
-                    peer.accept_broadcasted_transactions(self.idx, self.unconfirmmed_transactions)
+                    if not peer.return_idx() in self.black_list:
+                        peer.accept_broadcasted_transactions(self.idx, self.unconfirmmed_transactions)
 
-    def return_only_miners_in_peer_list(self):
+    def return_miners_eligible_to_continue(self):
         miners_set = set()
         for peer in self.peer_list:
             if peer.return_role() == 'miner':
                 miners_set.add(peer)
+        miners_set.add(self)
         return miners_set
 
     def return_accepted_broadcasted_transactions(self):
@@ -388,12 +470,19 @@ class Device:
 
 
     def verify_transaction_by_signature(self, transaction_to_verify):
-        local_updates_params = transaction_to_verify['local_updates']["local_updates_params"]
-        modulus = transaction_to_verify['local_updates']["signature"]["modulus"]
-        pub_key = transaction_to_verify['local_updates']["signature"]["pub_key"]
-        signature = transaction_to_verify['local_updates']["signature"]["signature"]
+        try:
+            transaction_device_idx = transaction_to_verify['worker_device_idx']
+        except:
+            transaction_device_idx = transaction_to_verify['validator_device_idx']
+        if transaction_device_idx in self.black_list:
+            return False
+        transaction_before_signed = copy.deepcopy(transaction_to_verify)
+        del transaction_before_signed["signature"]
+        modulus = transaction_to_verify['rsa_pub_key']["modulus"]
+        pub_key = transaction_to_verify['rsa_pub_key']["pub_key"]
+        signature = transaction_to_verify["signature"]
         # verify
-        hash = int.from_bytes(sha256(str(local_updates_params).encode('utf-8')).digest(), byteorder='big')
+        hash = int.from_bytes(sha256(str(sorted(transaction_before_signed.items()))).encode('utf-8')).digest(), byteorder='big')
         hashFromSignature = pow(signature, pub_key, modulus)
         return hash == hashFromSignature
     
@@ -407,19 +496,28 @@ class Device:
             current_hash = candidate_block.compute_hash()
         # return the qualified hash as a PoW proof, to be verified by other devices before adding the block
         # also set its hash as well. block_hash is the same as pow proof
-        candidate_block.set_hash(current_hash)
+        candidate_block.set_pow_proof(current_hash)
         return candidate_block
 
     def receive_propagated_block(self, received_propagated_block):
         if not received_propagated_block.return_mined_by() in self.black_list:
             self.received_propagated_block = copy.deepcopy(received_propagated_block)
+
+     def receive_propagated_validation_block(self, received_propagated_validation_block):
+        if not received_propagated_validation_block.return_mined_by() in self.black_list:
+            self.received_propagated_validation_block = copy.deepcopy(received_propagated_validation_block)
     
     def return_propagated_block(self):
         return self.received_propagated_block
+
+    def return_propagated_validation_block(self):
+        return self.received_propagated_validation_block
         
     def toss_propagated_block(self):
         self.received_propagated_block = None
-
+        
+    def toss_propagated_block(self):
+        self.received_propagated_validation_block = None
 
     # def set_block_to_add(self, block_to_add):
     #     self.block_to_add = block_to_add
@@ -432,14 +530,23 @@ class Device:
         self.associated_validator_set.clear()
         self.unconfirmmed_transactions.clear()
         self.broadcasted_transactions.clear()
+        # self.unconfirmmed_validator_transactions.clear()
+        # self.broadcasted_validator_transactions.clear()
         self.mined_block = None
         self.received_propagated_block = None
+        self.received_propagated_validation_block = None
+        self.has_added_block = False
 #        self.block_to_add = None
+
+    def miner_reset_vars_for_new_validation_round(self):
+        self.unconfirmmed_transactions.clear()
+        self.broadcasted_transactions.clear()
 
     ''' Validator '''
     def validator_reset_vars_for_new_round(self):
         self.validation_rewards_this_round = 0
         self.accuracies_this_round = {}
+        self.has_added_block = False
 
     def get_online_workers(self):
         online_workers_in_peer_list = set()
@@ -447,23 +554,23 @@ class Device:
             if peer.is_online():
                 if peer.return_role() == "worker":
                     online_workers_in_peer_list.add(peer)
-        if not online_workers_in_peer_list:
-            return False
-        return self.online_workers_in_peer_list
+        return online_workers_in_peer_list:
 
     def accept_accuracy(self, worker, effort_rewards):
         worker_idx = worker.return_idx()
-        worker_accuracy = worker.return_accuracy_this_round()
-        # record in block
-        self.accuracies_this_round[worker_idx] = worker_accuracy
-        self.receive_rewards(effort_rewards)
-        # record in its own cache
-        # if worker_idx in self.worker_accuracy_records.keys():
-        #     self.worker_accuracy_records[worker_idx].append(worker_accuracy)
-        #     self.receive_rewards(effort_rewards)
-        # else:
-        #     self.worker_accuracy_records[worker_idx] = [worker_accuracy]
-        #     self.receive_rewards(effort_rewards)
+        if not worker_idx in self.black_list:
+            worker_accuracy = worker.return_accuracy_this_round()
+            # record in block
+            self.accuracies_this_round[worker_idx] = worker_accuracy
+            self.validation_rewards_this_round += 1
+            self.receive_rewards(effort_rewards)
+            # record in its own cache
+            # if worker_idx in self.worker_accuracy_records.keys():
+            #     self.worker_accuracy_records[worker_idx].append(worker_accuracy)
+            #     self.receive_rewards(effort_rewards)
+            # else:
+            #     self.worker_accuracy_records[worker_idx] = [worker_accuracy]
+            #     self.receive_rewards(effort_rewards)
     
     # def record_worker_performance_in_block(self, validator_candidate_block, comm_round, rewards):
     #     kick_out_device_set = set()
@@ -479,7 +586,7 @@ class Device:
     #         validation_effort_rewards += rewards
     #     validator_candidate_block.add_validator_transaction({'validator_idx': self.return_idx(), 'round_number': comm_round, 'accuracies_this_round': self.accuracies_this_round, 'kicked_out_devices': kick_out_device_set, 'validation_effort_rewards': validation_effort_rewards})
 
-    def build_validation_transaction(self, validator_candidate_block, comm_round, rewards):
+    def return_validations_and_signature(self, comm_round):
         #kick_out_device_set = set()
         #validation_effort_rewards = 0
         # from more_itertools import split_when
@@ -491,11 +598,13 @@ class Device:
         #             break
         #     self.receive_rewards(rewards)
         #     validation_effort_rewards += rewards
-        return {'validator_idx': self.return_idx(), 'round_number': comm_round, 'accuracies_this_round': copy.deepcopy(self.accuracies_this_round), 'validation_effort_rewards': self.validation_rewards_this_round}
+        validation_transaction_dict = {'validator_device_idx': self.return_idx(), 'round_number': comm_round, 'accuracies_this_round': copy.deepcopy(self.accuracies_this_round), 'validation_effort_rewards': self.validation_rewards_this_round, "rsa_pub_key": self.return_rsa_pub_key()}
+        validation_transaction_dict["signature"] = self.sign_msg(sorted(validation_transaction_dict.items()))
+        return validation_transaction_dict
 
     ''' miner and validator '''
     def sign_block(self, block_to_sign):
-        block_to_sign.add_signature(self.sign_msg(block_to_sign.__dict__))
+        block_to_sign.set_signature(self.sign_msg(block_to_sign.__dict__))
 
     ''' worker and validator '''
     # def associate_with_miner(self):
@@ -513,7 +622,8 @@ class Device:
         miners_in_peer_list = set()
         for peer in self.peer_list:
             if peer.return_role() == "miner":
-                miners_in_peer_list.add(peer)
+                if not peer.return_idx() in self.black_list:
+                    miners_in_peer_list.add(peer)
         if not miners_in_peer_list:
             return False
         self.worker_associated_miner = random.sample(miners_in_peer_list, 1)[0]
