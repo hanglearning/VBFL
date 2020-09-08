@@ -11,10 +11,10 @@ from hashlib import sha256
 from Blockchain import Blockchain
 
 class Device:
-    def __init__(self, idx, assigned_train_ds, assigned_test_ds, local_batch_size, loss_func, opti, network_stability, net, dev, kick_out_rounds):
+    def __init__(self, idx, assigned_train_ds, assigned_test_dl, local_batch_size, loss_func, opti, network_stability, net, dev, kick_out_rounds):
         self.idx = idx
         self.train_ds = assigned_train_ds
-        self.test_ds = assigned_test_ds
+        self.test_dl = assigned_test_dl
         self.local_batch_size = local_batch_size
         self.loss_func = loss_func
         self.opti = opti
@@ -22,7 +22,6 @@ class Device:
         self.net = net
         self.dev = dev
         self.train_dl = None
-        self.test_dl = None
         self.local_train_parameters = None
         self.initial_net_parameters = None
         self.global_parameters = None
@@ -120,6 +119,16 @@ class Device:
             self.role = "miner"
         else:
             self.role = "validator"
+
+    # used for hard_assign
+    def assign_miner_role(self):
+        self.role = "miner"
+
+    def assign_worker_role(self):
+        self.role = "worker"
+
+    def assign_validator_role(self):
+        self.role = "validator"   
         
     def return_role(self):
         return self.role
@@ -130,11 +139,14 @@ class Device:
         if online_indicator < self.network_stability:
             self.on_line = True
         else:
+            print(f"{self.return_idx()} goes offline.")
             self.on_line = False
         return self.on_line
 
     def is_back_online(self):
-        return self.old_status == False and self.old_status != self.on_line
+        if self.old_status == False and self.old_status != self.on_line:
+            print(f"{self.return_idx()} goes back online.")
+            return True
 
     def is_online(self):
         return self.on_line
@@ -148,7 +160,9 @@ class Device:
     # def is_not_phased_out(self):
     #     return self.phased_out
     
-    def update_peer_list(self):
+    def update_peer_list(self, verbose=False):
+        print(f"\n{self.return_idx()} is updating peer list...")
+        old_peer_list = copy.copy(self.peer_list)
         online_peers = set()
         offline_peers = set()
         for peer in self.peer_list:
@@ -169,6 +183,27 @@ class Device:
             if peer.return_idx() in self.black_list:
                 potential_malicious_peer_set.add(peer)
         self.remove_peers(potential_malicious_peer_set)
+        if verbose:
+            if old_peer_list == self.peer_list:
+                print("Peer list NOT changed.")
+            else:
+                print("Peer list has been changed.")
+                removed_peers = offline_peers.union(potential_malicious_peer_set)
+                added_peers = self.peer_list.difference(old_peer_list)
+                if removed_peers:
+                    print("These peers are removed")
+                    for peer in removed_peers:
+                        print(f"d_{peer.return_idx().split('_')[-1]} - {peer.return_role()[0]}", end=', ')
+                    print()
+                if added_peers:
+                    print("These peers are added")
+                    for peer in added_peers:
+                        print(f"d_{peer.return_idx().split('_')[-1]} - {peer.return_role()[0]}", end=', ')
+                    print()
+                print("Final peer list:")
+                for peer in self.peer_list:
+                    print(f"d_{peer.return_idx().split('_')[-1]} - {peer.return_role()[0]}", end=', ')
+                print()
         # if peer_list ends up empty, randomly register with another device
         return False if not self.peer_list else True
 
@@ -203,17 +238,22 @@ class Device:
                     return False
         return True
 
-    def pow_resync_chain(self):
+    def pow_resync_chain(self, verbose=False):
         longest_chain = None
+        updated_from_peer = None
         for peer in self.peer_list:
             if peer.is_online():
                 peer_chain = peer.return_blockchain_object()
                 curr_chain_len = self.return_blockchain_object().return_chain_length()
                 if peer_chain.return_chain_length() > curr_chain_len:
                     if self.check_chain_validity(peer_chain):
+                        print(f"A longer chain from {peer.return_idx()} has been found and verified.")
                         # Longer valid chain found!
                         curr_chain_len = peer_chain.return_chain_length()
                         longest_chain = peer_chain
+                        updated_from_peer = peer.return_idx()
+                    else:
+                        print(f"A longer chain from {peer.return_idx()} has been found BUT NOT verified. Skipped this chain for syncing.")
         if longest_chain:
             # compare chain difference
             longest_chain_structure = longest_chain.return_chain_structure()
@@ -223,9 +263,13 @@ class Device:
             #     if chain_structure_before_replace[block_iter].compute_hash(hash_entire_block=True) != longest_chain_structure[block_iter].compute_hash(hash_entire_block=True):
             #         break
             self.return_blockchain_object().replace_chain(longest_chain_structure)
-            print(f"{self.return_idx()} chain resynced")
+            if verbose:
+                print(f"{self.return_idx()} chain resynced from peer {updated_from_peer}.")
             #return block_iter
             return True
+        if verbose:
+            print("Chain not resynced.")
+        return False
 
     def receive_rewards(self, rewards):
         self.rewards += rewards
@@ -233,11 +277,16 @@ class Device:
     def return_computation_power(self):
         return self.computation_power
 
-    def verify_block(self, block_to_verify):
+    def verify_block(self, block_to_verify, source_miner):
+        if source_miner in self.black_list:
+            print(f"The miner sending this block {source_miner} is in {self.return_idx()}'s black list. Block will not be verified.")
+            return False
         if block_to_verify.return_mined_by() in self.black_list:
+            print(f"The miner {block_to_verify.return_mined_by()} mined this block is in {self.return_idx()}'s black list. Block will not be verified.")
             return False
         # check if the proof is valid(verify _block_hash).
         if not self.check_pow_proof(block_to_verify):
+            print(f"PoW proof of the block from miner {self.return_idx()} is not verified.")
             return False
         # check if the signature is valid
         signature_dict = block_to_verify.return_miner_pub_key()
@@ -250,12 +299,14 @@ class Device:
         hash = int.from_bytes(sha256(str(block_to_verify_before_sign.__dict__).encode('utf-8')).digest(), byteorder='big')
         hashFromSignature = pow(signature, pub_key, modulus)
         if hash != hashFromSignature:
+            print(f"Signature of the block from miner {self.return_idx()} is not verified.")
             return False
         last_block = self.return_blockchain_object().return_last_block()
         if last_block is not None:
             # check if the previous_hash referred in the block and the hash of latest block in the chain match.
             last_block_hash = last_block.compute_hash(hash_entire_block=True)
             if block_to_verify.return_previous_block_hash() != last_block_hash:
+                print(f"Block from miner {self.return_idx()} has the previous hash recorded as {block_to_verify.return_previous_block_hash()}, but the last block's hash in chain is {last_block_hash}. Not verified.")
                 # debug
                 #print("last_block")
                 #print(str(sorted(last_block.__dict__.items())).encode('utf-8'))
@@ -266,6 +317,7 @@ class Device:
         # All verifications done.
         # ???When syncing by calling consensus(), rebuilt block doesn't have this field. add the block hash after verifying
 			# block_to_verify.set_pow_proof()
+        print(f"Block accepted from miner {source_miner} mined by {block_to_verify.return_mined_by()} has been verified!")
         return block_to_verify
 
     def add_block(self, block_to_add):
@@ -276,6 +328,8 @@ class Device:
                 print("Validation block cannot be appended to a validation block.")
                 return False
         self.return_blockchain_object().append_block(block_to_add)
+        block_type = "validator_block" if block_to_add.is_validator_block() else "worker_block"
+        print(f"d_{self.return_idx().split('_')[-1]} - {self.return_role()[0]} has appened a {block_type} to its chain. Chain length now - {self.return_blockchain_object().return_chain_length()}")
         self.has_added_block = True
         return True
 
@@ -286,15 +340,21 @@ class Device:
         return self.has_added_block        
 
     def operate_on_validator_block(self, passed_in_validator_block=None):
+        old_black_list = copy.copy(self.black_list)
         if not passed_in_validator_block:
             block_to_operate = self.return_blockchain_object().return_last_block()
         else:
             # use when chain resynced
             block_to_operate = passed_in_validator_block
+        if block_to_operate.return_mined_by() in self.black_list:
+            print(f"Block miner {block_to_operate.return_mined_by()} is in {self.return_idx()}'s black list. operate_on_validator_block terminated.")
         transactions = block_to_operate.return_transactions()
         for transaction in transactions:
             if transaction['validator_device_idx'] in self.black_list:
+                print(f"Validator {transaction['validator_device_idx']} of this transaction is in {self.return_idx()}'s black list. This transaction is ignored.")
                 continue
+            else:
+                print(f"Processing transaction from validator {transaction['validator_device_idx']}...")
             accuracies_this_round = transaction['accuracies_this_round']
             for worker_idx, worker_accuracy in accuracies_this_round.items():
                 if not worker_idx in self.worker_accuracy_records.keys():
@@ -310,6 +370,16 @@ class Device:
                         self.black_list.add(worker_idx)
                         break
                         # add malicious devices to the black list
+        new_black_list_peers = self.black_list.difference(old_black_list)
+        print(f"validator block {passed_in_validator_block.return_block_idx} has been processed.")
+        if new_black_list_peers:
+            print("These peers are put into the black_list")
+            for peer in new_black_list_peers:
+                print(f"d_{peer.return_idx().split('_')[-1]} - {peer.return_role()[0]}", end=', ')
+            print()
+        else:
+            print("No new peers are put into the black_list")
+
 
     # def update_model_after_chain_resync(self, chain_diff_at_index):
     #     for block in self.return_blockchain_object().return_chain_structure()[chain_diff_at_index:]:
@@ -364,9 +434,13 @@ class Device:
         self.local_updates_rewards = 0
         self.has_added_block = False
 
-    def receive_block_from_miner(self, received_block):
-        if not received_block.return_mined_by() in self.black_list:
+    def receive_block_from_miner(self, received_block, source_miner):
+        if not (received_block.return_mined_by() in self.black_list or source_miner in self.black_list):
             self.received_block_from_miner = copy.deepcopy(received_block)
+            print(f"Worker {self.return_idx()} has received a new block from {source_miner} mined by {received_block.return_mined_by()}.")
+        else:
+            print(f"Either the block sending miner {source_miner} or the miner {eceived_block.return_mined_by()} mined this block is in worker {self.return_idx()}'s black list. Block is not accepted.")
+            
 
     def toss_received_block(self):
         self.received_block_from_miner = None
@@ -379,7 +453,6 @@ class Device:
             self.net.load_state_dict(self.global_parameters, strict=True)
             sum_accu = 0
             num = 0
-            self.test_dl = DataLoader(self.test_ds, batch_size=self.local_batch_size, shuffle=True)
             for data, label in self.test_dl:
                 data, label = data.to(self.dev), label.to(self.dev)
                 preds = self.net(data)
@@ -394,8 +467,10 @@ class Device:
         else:
             # use when chain resynced
             block_to_operate = passed_in_block_to_operate
+        if block_to_operate.return_mined_by() in self.black_list:
+            print(f"Block miner {block_to_operate.return_mined_by()} is in {self.return_idx()}'s black list. global_update terminated.")
         if block_to_operate.is_validator_block():
-            print(f"block {block_to_operate.return_block_idx()} is a validator appened block. skip global model updates for this block")
+            print(f"Block {block_to_operate.return_block_idx()} is a validator appened block. skip global model updates for this block")
             return
         # avg the gradients
         sum_parameters = None
@@ -403,7 +478,14 @@ class Device:
         transactions = block_to_operate.return_transactions()
         for transaction in transactions:
             if transaction['worker_device_idx'] in self.black_list:
+                print(f"Worker {transaction['worker_device_idx']} of this transaction is in {self.return_idx()}'s black list. This transaction is ignored.")
                 continue
+            if self.verify_transaction_by_signature(transaction, ignore_miner=True):
+                # print(f"The signature of the transaction from worker {transaction['worker_device_idx']} has been veified. Processing...")
+                print("Transaction processing...")
+            else:
+                # print(f"The signature of the transaction from worker {transaction['worker_device_idx']} is NOT veified. Ignored this transaction.")
+                print("Transaction ignored.")
             local_updates_params = transaction['local_updates_params']
             if sum_parameters is None:
                 sum_parameters = copy.deepcopy(local_updates_params)
@@ -422,10 +504,14 @@ class Device:
     def add_worker_to_association(self, worker_device):
         if not worker_device.return_idx() in self.black_list:
             self.associated_worker_set.add(worker_device)
+        else:
+            print(f"{worker_device.return_idx()} in miner {self.return_idx()}'s black list. Not added.")
 
     def add_validator_to_association(self, validator_device):
         if not validator_device.return_idx() in self.black_list:
             self.associated_validator_set.add(validator_device)
+        else:
+            print(f"{worker_device.return_idx()} in miner {self.return_idx()}'s black list. Not added.")
 
     def return_associated_workers(self):
         return self.associated_worker_set
@@ -449,6 +535,9 @@ class Device:
         # discard malicious node
         if not source_miner_idx in self.black_list:
             self.broadcasted_transactions.append(copy.deepcopy(broadcasted_transactions))
+            print(f"Miner {self.return_idx()} has accepted accept_broadcasted transactions from miner {source_miner_idx}")
+        else:
+            print(f"Source miner {source_miner_idx} is in miner {self.return_idx()}'s black list. Transaction not accepted.")
 
     def broadcast_transactions(self):
         for peer in self.peer_list:
@@ -456,6 +545,9 @@ class Device:
                 if peer.return_role() == 'miner':
                     if not peer.return_idx() in self.black_list:
                         peer.accept_broadcasted_transactions(self.idx, self.unconfirmmed_transactions)
+                        print(f"Miner {self.idx} is boardcasting transactions to miner {peer.return_idx()}.")
+                    else:
+                        print(f"Destination miner {peer.return_idx()} is in miner {self.idx}'s black_list. Boardcasting terminates.")
 
     def return_miners_eligible_to_continue(self):
         miners_set = set()
@@ -469,22 +561,31 @@ class Device:
         return self.broadcasted_transactions
 
 
-    def verify_transaction_by_signature(self, transaction_to_verify):
+    def verify_transaction_by_signature(self, transaction_to_verify, ignore_miner=False):
         try:
             transaction_device_idx = transaction_to_verify['worker_device_idx']
         except:
             transaction_device_idx = transaction_to_verify['validator_device_idx']
         if transaction_device_idx in self.black_list:
+            print(f"{transaction_device_idx} is in miner's blacklist. Trasaction won't get verified.")
             return False
         transaction_before_signed = copy.deepcopy(transaction_to_verify)
         del transaction_before_signed["signature"]
+        if ignore_miner:
+            del transaction_before_signed["tx_verified_by"]
+            del transaction_before_signed["mining_rewards"]
         modulus = transaction_to_verify['rsa_pub_key']["modulus"]
         pub_key = transaction_to_verify['rsa_pub_key']["pub_key"]
         signature = transaction_to_verify["signature"]
         # verify
         hash = int.from_bytes(sha256(str(sorted(transaction_before_signed.items())).encode('utf-8')).digest(), byteorder='big')
         hashFromSignature = pow(signature, pub_key, modulus)
-        return hash == hashFromSignature
+        if hash == hashFromSignature:
+            print(f"Transaction from {transaction_device_idx} is verified!")
+            return True
+        else:
+            print(f"Signature invalid. Transaction from {transaction_device_idx} is NOT verified.")
+            return False
     
     def proof_of_work(self, candidate_block, starting_nonce=0):
         candidate_block.set_mined_by(self.return_idx())
@@ -502,6 +603,9 @@ class Device:
     def receive_propagated_block(self, received_propagated_block):
         if not received_propagated_block.return_mined_by() in self.black_list:
             self.received_propagated_block = copy.deepcopy(received_propagated_block)
+            print(f"Miner {self.return_idx()} has received a propagated block from {received_propagated_block.return_mined_by()}.")
+        else:
+            print(f"Propagated block miner {received_propagated_block.return_mined_by()} is in miner {self.return_idx()}'s blacklist. Block not accepted.")
 
     def receive_propagated_validation_block(self, received_propagated_validation_block):
         if not received_propagated_validation_block.return_mined_by() in self.black_list:
@@ -660,11 +764,11 @@ class DevicesInNetwork(object):
         train_data = mnist_dataset.train_data
         train_label = mnist_dataset.train_label
         # perpare test data
-        #test_data = torch.tensor(mnist_dataset.test_data)
-        #test_label = torch.argmax(torch.tensor(mnist_dataset.test_label), dim=1)
-        # self.test_data_loader = DataLoader(TensorDataset( test_data, test_label), batch_size=100, shuffle=False)
-        test_data = mnist_dataset.test_data
-        test_label = mnist_dataset.test_label
+        test_data = torch.tensor(mnist_dataset.test_data)
+        test_label = torch.argmax(torch.tensor(mnist_dataset.test_label), dim=1)
+        test_data_loader = DataLoader(TensorDataset( test_data, test_label), batch_size=100, shuffle=False)
+        # test_data = mnist_dataset.test_data
+        # test_label = mnist_dataset.test_label
         # shard dataset and distribute among devices
         shard_size = mnist_dataset.train_data_size // self.num_devices // 2
         shards_id = np.random.permutation(mnist_dataset.train_data_size // shard_size)
@@ -680,14 +784,14 @@ class DevicesInNetwork(object):
             local_train_data, local_train_label = np.vstack((data_shards1, data_shards2)), np.vstack((label_shards1, label_shards2))
             local_train_label = np.argmax(local_train_label, axis=1)
             # distribute test data
-            data_shards1 = test_data[shards_id1 * shard_size: shards_id1 * shard_size + shard_size]
-            data_shards2 = test_data[shards_id2 * shard_size: shards_id2 * shard_size + shard_size]
-            label_shards1 = test_label[shards_id1 * shard_size: shards_id1 * shard_size + shard_size]
-            label_shards2 = test_label[shards_id2 * shard_size: shards_id2 * shard_size + shard_size]
-            local_test_data, local_test_label = np.vstack((data_shards1, data_shards2)), np.vstack((label_shards1, label_shards2))
-            local_test_label = np.argmax(local_test_label, axis=1)
+            # data_shards1 = test_data[shards_id1 * shard_size: shards_id1 * shard_size + shard_size]
+            # data_shards2 = test_data[shards_id2 * shard_size: shards_id2 * shard_size + shard_size]
+            # label_shards1 = test_label[shards_id1 * shard_size: shards_id1 * shard_size + shard_size]
+            # label_shards2 = test_label[shards_id2 * shard_size: shards_id2 * shard_size + shard_size]
+            # local_test_data, local_test_label = np.vstack((data_shards1, data_shards2)), np.vstack((label_shards1, label_shards2))
+            # local_test_label = np.argmax(local_test_label, axis=1)
             # assign data to a device and put in the devices set
             device_idx = f'device_{i+1}'
-            a_device = Device(device_idx, TensorDataset(torch.tensor(local_train_data), torch.tensor(local_train_label)), TensorDataset(torch.tensor(local_test_data), torch.tensor(local_test_label)), self.batch_size, self.loss_func, self.opti, self.default_network_stability, self.net, self.dev, self.kick_out_rounds)
+            a_device = Device(device_idx, TensorDataset(torch.tensor(local_train_data), torch.tensor(local_train_label)), test_data_loader, self.batch_size, self.loss_func, self.opti, self.default_network_stability, self.net, self.dev, self.kick_out_rounds)
             # device index starts from 1
             self.devices_set[device_idx] = a_device
