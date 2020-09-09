@@ -6,6 +6,7 @@ from DatasetLoad import DatasetLoad
 import random
 import copy
 # https://cryptobook.nakov.com/digital-signatures/rsa-sign-verify-examples
+from more_itertools import split_when
 from Crypto.PublicKey import RSA
 from hashlib import sha256
 from Blockchain import Blockchain
@@ -54,7 +55,7 @@ class Device:
         ''' For workers '''
         self.local_updates_rewards = 0
         self.received_block_from_miner = None
-        self.accuracy_this_round = None
+        self.accuracy_this_round = float('-inf')
         ''' For miners '''
         self.associated_worker_set = set()
         self.associated_validator_set = set()
@@ -161,7 +162,7 @@ class Device:
     #     return self.phased_out
     
     def update_peer_list(self, verbose=False):
-        print(f"\n{self.return_idx()} is updating peer list...")
+        print(f"\n{self.return_idx()} - {self.return_role()} is updating peer list...")
         old_peer_list = copy.copy(self.peer_list)
         online_peers = set()
         offline_peers = set()
@@ -241,13 +242,13 @@ class Device:
     def pow_resync_chain(self, verbose=False):
         longest_chain = None
         updated_from_peer = None
+        curr_chain_len = self.return_blockchain_object().return_chain_length()
         for peer in self.peer_list:
             if peer.is_online():
                 peer_chain = peer.return_blockchain_object()
-                curr_chain_len = self.return_blockchain_object().return_chain_length()
                 if peer_chain.return_chain_length() > curr_chain_len:
                     if self.check_chain_validity(peer_chain):
-                        print(f"A longer chain from {peer.return_idx()} has been found and verified.")
+                        print(f"A longer chain from {peer.return_idx()} with chain length {peer_chain.return_chain_length()} has been found (> currently compared chain length {curr_chain_len}) and verified.")
                         # Longer valid chain found!
                         curr_chain_len = peer_chain.return_chain_length()
                         longest_chain = peer_chain
@@ -363,7 +364,7 @@ class Device:
             accuracies_this_round = transaction['accuracies_this_round']
             for worker_idx, worker_accuracy in accuracies_this_round.items():
                 # voting system
-                if not worker_idx in self.worker_accuracy_accross_records.keys():
+                if not worker_idx in voted_worker_accuracy_this_round.keys():
                     voted_worker_accuracy_this_round[worker_idx] = {}
                     voted_worker_accuracy_this_round[worker_idx][worker_accuracy] = 1
                 else:
@@ -371,20 +372,20 @@ class Device:
                         voted_worker_accuracy_this_round[worker_idx][worker_accuracy] += 1
                     else:
                         voted_worker_accuracy_this_round[worker_idx][worker_accuracy] = 1
-            # recognize the accuracy recorded by most of the validators
-            for worker_idx, worker_accuracy in voted_worker_accuracy_this_round.items():
-                accuracy_recorded_by_most_validators = list({k: v for k, v in sorted(voted_worker_accuracy_this_round.items(), key=lambda item: item[1],reverse=True)})[0]
-                if not worker_idx in self.worker_accuracy_accross_records.keys():
-                    self.worker_accuracy_accross_records[worker_idx] = []
-                self.worker_accuracy_accross_records[worker_idx].append(accuracy_recorded_by_most_validators)
+        # recognize the accuracy recorded by most of the validators
+        for worker_idx, worker_accuracy in voted_worker_accuracy_this_round.items():
+            accuracy_recorded_by_most_validators = list({k: v for k, v in sorted(worker_accuracy.items(), key=lambda item: item[1], reverse=True)})[0]
+            if not worker_idx in self.worker_accuracy_accross_records.keys():
+                self.worker_accuracy_accross_records[worker_idx] = []
+            self.worker_accuracy_accross_records[worker_idx].append(accuracy_recorded_by_most_validators)
         # check and add to black_list
-        from more_itertools import split_when
-        for worker_idx, worker_accuracy in self.worker_accuracy_accross_records.items():
+        for worker_idx, worker_accuracy in self.worker_accuracy_accross_records.items():            
             if not worker_idx in self.black_list:
                 decreasing_accuracies = list(split_when(worker_accuracy, lambda x, y: y > x))
                 for decreasing_accuracie in decreasing_accuracies:
                     if len(decreasing_accuracie) >= self.kick_out_rounds:
                         self.black_list.add(worker_idx)
+                        print(f"{worker_idx} has been put in {self.return_idx()}'s black list")
                         break
                         # add malicious devices to the black list
         new_black_list_peers = self.black_list.difference(old_black_list)
@@ -392,7 +393,7 @@ class Device:
         if new_black_list_peers:
             print("These peers are put into the black_list")
             for peer in new_black_list_peers:
-                print(f"d_{peer.return_idx().split('_')[-1]} - {peer.return_role()[0]}", end=', ')
+                print(f"d_{peer.split('_')[-1]}", end=', ')
             print()
         else:
             print("No new peers are put into the black_list")
@@ -447,7 +448,7 @@ class Device:
 
     def worker_reset_vars_for_new_round(self):
         self.received_block_from_miner = None
-        self.accuracy_this_round = None
+        self.accuracy_this_round = float('-inf')
         self.local_updates_rewards = 0
         self.has_added_block = False
 

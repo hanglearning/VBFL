@@ -609,14 +609,14 @@ if __name__=="__main__":
                 if worker.return_received_block_from_miner():
                     worker.global_update()
                     accuracy = worker.evaluate_updated_weights()
-                    if accuracy==None:
-                        print()
                     accuracy = float(accuracy)
                     worker.set_accuracy_this_round(accuracy)
                     report_msg = f'Worker {worker.return_idx()} at the communication round {comm_round+1} with chain length {worker.return_blockchain_object().return_chain_length()} has accuracy: {accuracy}\n'
                     print(report_msg)
                     workers_accuracies_records[worker.return_idx()][f'round_{comm_round}'] = accuracy
                     worker.online_switcher()
+                else:
+                    print(f'No block has been sent to worker {worker.return_idx()}. Skipping global update.\n')
         
         # record accuries in log file
         log_file_path = f"logs/accuracy_report_{date_time}.txt"
@@ -923,6 +923,7 @@ if __name__=="__main__":
                                 block_to_propagate = device.return_blockchain_object().return_last_block()
                                 if block_to_propagate.is_validator_block():
                                     device.operate_on_validator_block()
+                    print(f"\nminer {miner.return_idx()} is processing this validator block.")
                     miner.operate_on_validator_block()
 
                 
