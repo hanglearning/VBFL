@@ -768,7 +768,7 @@ class Device:
         return self.mined_block
 
 class DevicesInNetwork(object):
-    def __init__(self, data_set_name, is_iid, batch_size, loss_func, opti, num_devices, network_stability, net, dev, kick_out_rounds):
+    def __init__(self, data_set_name, is_iid, batch_size, loss_func, opti, num_devices, network_stability, net, dev, kick_out_rounds, shard_test_data):
         self.data_set_name = data_set_name
         self.is_iid = is_iid
         self.batch_size = batch_size
@@ -782,42 +782,56 @@ class DevicesInNetwork(object):
         # self.test_data_loader = None
         self.default_network_stability = network_stability
         # distribute dataset
+        self.shard_test_data = shard_test_data
         self.data_set_balanced_allocation()
 
     # distribute the dataset evenly to the devices
     def data_set_balanced_allocation(self):
         # read dataset
         mnist_dataset = DatasetLoad(self.data_set_name, self.is_iid)
+        
         # perpare training data
         train_data = mnist_dataset.train_data
         train_label = mnist_dataset.train_label
-        # perpare test data
-        test_data = torch.tensor(mnist_dataset.test_data)
-        test_label = torch.argmax(torch.tensor(mnist_dataset.test_label), dim=1)
-        test_data_loader = DataLoader(TensorDataset( test_data, test_label), batch_size=100, shuffle=False)
-        # test_data = mnist_dataset.test_data
-        # test_label = mnist_dataset.test_label
         # shard dataset and distribute among devices
-        shard_size = mnist_dataset.train_data_size // self.num_devices // 2
-        shards_id = np.random.permutation(mnist_dataset.train_data_size // shard_size)
+        # shard train
+        shard_size_train = mnist_dataset.train_data_size // self.num_devices // 2
+        shards_id_train = np.random.permutation(mnist_dataset.train_data_size // shard_size_train)
+
+        # perpare test data
+        if not self.shard_test_data:
+            test_data = torch.tensor(mnist_dataset.test_data)
+            test_label = torch.argmax(torch.tensor(mnist_dataset.test_label), dim=1)
+            test_data_loader = DataLoader(TensorDataset( test_data, test_label), batch_size=100, shuffle=False)
+        else:
+            test_data = mnist_dataset.test_data
+            test_label = mnist_dataset.test_label
+             # shard test
+            shard_size_test = mnist_dataset.test_data_size // self.num_devices // 2
+            shards_id_test = np.random.permutation(mnist_dataset.test_data_size // shard_size_test)
+            
         for i in range(self.num_devices):
             # make it more random by introducing two shards
-            shards_id1 = shards_id[i * 2]
-            shards_id2 = shards_id[i * 2 + 1]
+            shards_id_train1 = shards_id_train[i * 2]
+            shards_id_train2 = shards_id_train[i * 2 + 1]
             # distribute training data
-            data_shards1 = train_data[shards_id1 * shard_size: shards_id1 * shard_size + shard_size]
-            data_shards2 = train_data[shards_id2 * shard_size: shards_id2 * shard_size + shard_size]
-            label_shards1 = train_label[shards_id1 * shard_size: shards_id1 * shard_size + shard_size]
-            label_shards2 = train_label[shards_id2 * shard_size: shards_id2 * shard_size + shard_size]
+            data_shards1 = train_data[shards_id_train1 * shard_size_train: shards_id_train1 * shard_size_train + shard_size_train]
+            data_shards2 = train_data[shards_id_train2 * shard_size_train: shards_id_train2 * shard_size_train + shard_size_train]
+            label_shards1 = train_label[shards_id_train1 * shard_size_train: shards_id_train1 * shard_size_train + shard_size_train]
+            label_shards2 = train_label[shards_id_train2 * shard_size_train: shards_id_train2 * shard_size_train + shard_size_train]
             local_train_data, local_train_label = np.vstack((data_shards1, data_shards2)), np.vstack((label_shards1, label_shards2))
             local_train_label = np.argmax(local_train_label, axis=1)
             # distribute test data
-            # data_shards1 = test_data[shards_id1 * shard_size: shards_id1 * shard_size + shard_size]
-            # data_shards2 = test_data[shards_id2 * shard_size: shards_id2 * shard_size + shard_size]
-            # label_shards1 = test_label[shards_id1 * shard_size: shards_id1 * shard_size + shard_size]
-            # label_shards2 = test_label[shards_id2 * shard_size: shards_id2 * shard_size + shard_size]
-            # local_test_data, local_test_label = np.vstack((data_shards1, data_shards2)), np.vstack((label_shards1, label_shards2))
-            # local_test_label = np.argmax(local_test_label, axis=1)
+            if self.shard_test_data:
+                shards_id_test1 = shards_id_test[i * 2]
+                shards_id_test2 = shards_id_test[i * 2 + 1]
+                data_shards1 = test_data[shards_id_test1 * shard_size_test: shards_id_test1 * shard_size_test + shard_size_test]
+                data_shards2 = test_data[shards_id_test2 * shard_size_test: shards_id_test2 * shard_size_test + shard_size_test]
+                label_shards1 = test_label[shards_id_test1 * shard_size_test: shards_id_test1 * shard_size_test + shard_size_test]
+                label_shards2 = test_label[shards_id_test2 * shard_size_test: shards_id_test2 * shard_size_test + shard_size_test]
+                local_test_data, local_test_label = np.vstack((data_shards1, data_shards2)), np.vstack((label_shards1, label_shards2))
+                local_test_label = torch.argmax(torch.tensor(local_test_label), dim=1)
+                test_data_loader = DataLoader(TensorDataset(torch.tensor(local_test_data), torch.tensor(local_test_label)), batch_size=100, shuffle=False)
             # assign data to a device and put in the devices set
             device_idx = f'device_{i+1}'
             a_device = Device(device_idx, TensorDataset(torch.tensor(local_train_data), torch.tensor(local_train_label)), test_data_loader, self.batch_size, self.loss_func, self.opti, self.default_network_stability, self.net, self.dev, self.kick_out_rounds)
