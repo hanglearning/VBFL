@@ -359,9 +359,7 @@ if __name__=="__main__":
                     continue
                 for worker in associated_workers:
                     if worker.is_online():
-                        miner.add_unconfirmmed_transaction(worker.return_local_updates_and_signature(comm_round))
-                        if args["verbose"]:
-                            print(f"worker {worker.return_idx()}'s transaction has been accepted.")
+                        miner.add_unconfirmmed_transaction(worker.return_local_updates_and_signature(comm_round), worker.return_idx())
                     else:
                         potential_offline_workers.add(worker)
                         if args["verbose"]:
@@ -396,65 +394,64 @@ if __name__=="__main__":
                     if miner.pow_resync_chain(args['verbose']):
                         miner.update_model_after_chain_resync()
             if miner.is_online():
-                if miner.return_associated_workers():
-                    start_time = time.time()
-                    # block index starts from 1
-                    candidate_block = Block(idx=miner.return_blockchain_object().return_chain_length()+1, miner_pub_key=miner.return_rsa_pub_key())
-                    # self verification
-                    unconfirmmed_transactions = miner.return_unconfirmmed_transactions()
-                    if unconfirmmed_transactions:
-                        print(f"\n{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} doing self verification...")
-                    else:
-                        print(f"{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} will not do self verification.")
+                start_time = time.time()
+                # block index starts from 1
+                candidate_block = Block(idx=miner.return_blockchain_object().return_chain_length()+1, miner_pub_key=miner.return_rsa_pub_key())
+                # self verification
+                unconfirmmed_transactions = miner.return_unconfirmmed_transactions()
+                if unconfirmmed_transactions:
+                    print(f"\n{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} doing self verification...")
+                else:
+                    print(f"\nNo recorded transactions by {miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} will not do self verification.")
+                for unconfirmmed_transaction in unconfirmmed_transactions:
+                    if miner.verify_transaction_by_signature(unconfirmmed_transaction):
+                        unconfirmmed_transaction['tx_verified_by'] = miner.return_idx()
+                        # TODO any idea?
+                        unconfirmmed_transaction['mining_rewards'] = rewards
+                        candidate_block.add_verified_transaction(unconfirmmed_transaction)
+                        miner.receive_rewards(rewards)
+                # cross verification
+                accepted_broadcasted_transactions = miner.return_accepted_broadcasted_transactions()
+                if accepted_broadcasted_transactions:
+                    print(f"{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} doing cross verification...")
+                else:
+                    print(f"No broadcasted transactions have been recorded by {miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} will not do cross verification.")
+                for unconfirmmed_transactions in accepted_broadcasted_transactions:
                     for unconfirmmed_transaction in unconfirmmed_transactions:
                         if miner.verify_transaction_by_signature(unconfirmmed_transaction):
                             unconfirmmed_transaction['tx_verified_by'] = miner.return_idx()
                             # TODO any idea?
                             unconfirmmed_transaction['mining_rewards'] = rewards
                             candidate_block.add_verified_transaction(unconfirmmed_transaction)
-                            miner.receive_rewards(rewards)
-                    # cross verification
-                    accepted_broadcasted_transactions = miner.return_accepted_broadcasted_transactions()
-                    if accepted_broadcasted_transactions:
-                        print(f"{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} doing cross verification...")
+                            miner.receive_rewards(rewards) 
+                # mine the block
+                if candidate_block.return_transactions():
+                    print(f"{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} mining the worker block...")
+                    # return the last block and add previous hash
+                    last_block = miner.return_blockchain_object().return_last_block()
+                    if last_block is None:
+                        # mine the genesis block
+                        candidate_block.set_previous_block_hash(None)
                     else:
-                        print(f"{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} will not do cross verification.")
-                    for unconfirmmed_transactions in accepted_broadcasted_transactions:
-                        for unconfirmmed_transaction in unconfirmmed_transactions:
-                            if miner.verify_transaction_by_signature(unconfirmmed_transaction):
-                                unconfirmmed_transaction['tx_verified_by'] = miner.return_idx()
-                                # TODO any idea?
-                                unconfirmmed_transaction['mining_rewards'] = rewards
-                                candidate_block.add_verified_transaction(unconfirmmed_transaction)
-                                miner.receive_rewards(rewards) 
-                    # mine the block
-                    if candidate_block.return_transactions():
-                        print(f"{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} mining the block...")
-                        # return the last block and add previous hash
-                        last_block = miner.return_blockchain_object().return_last_block()
-                        if last_block is None:
-                            # mine the genesis block
-                            candidate_block.set_previous_block_hash(None)
-                        else:
-                            candidate_block.set_previous_block_hash(last_block.compute_hash(hash_entire_block=True))
-                        # mine the candidate block by PoW, inside which the block_hash is also set
-                        mined_block = miner.proof_of_work(candidate_block)
-                    else:
-                        print("No transaction to mine for this block.")
-                        continue
-                    # unfortunately may go offline
-                    if miner.online_switcher():
-                        # record mining time
-                        try:
-                            block_generation_time_spent[miner] = (time.time() - start_time)/(miner.return_computation_power())
-                            print(f"{miner.return_idx()} - miner mines a block in {block_generation_time_spent[miner]} seconds.")
-                        except:
-                            block_generation_time_spent[miner] = float('inf')
-                            print(f"{miner.return_idx()} - miner mines a block in INFINITE time...")
-                        mined_block.set_mining_rewards(rewards)
-                        # sign the block
-                        miner.sign_block(mined_block)
-                        miner.set_mined_block(mined_block)
+                        candidate_block.set_previous_block_hash(last_block.compute_hash(hash_entire_block=True))
+                    # mine the candidate block by PoW, inside which the block_hash is also set
+                    mined_block = miner.proof_of_work(candidate_block)
+                else:
+                    print("No transaction to mine for this block.")
+                    continue
+                # unfortunately may go offline
+                if miner.online_switcher():
+                    # record mining time
+                    try:
+                        block_generation_time_spent[miner] = (time.time() - start_time)/(miner.return_computation_power())
+                        print(f"{miner.return_idx()} - miner mines a worker block in {block_generation_time_spent[miner]} seconds.")
+                    except:
+                        block_generation_time_spent[miner] = float('inf')
+                        print(f"{miner.return_idx()} - miner mines a worker block in INFINITE time...")
+                    mined_block.set_mining_rewards(rewards)
+                    # sign the block
+                    miner.sign_block(mined_block)
+                    miner.set_mined_block(mined_block)
             else:
                 print(f"{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} is offline.")
 
@@ -465,10 +462,10 @@ if __name__=="__main__":
         try:
             winning_miner = min(block_generation_time_spent.keys(), key=(lambda miner: block_generation_time_spent[miner]))
         except:
-            print("No block is generated in this round. Skip to the next round.")
+            print("No worker block is generated in this round. Skip to the next round.")
             continue
         
-        print(f"\n{winning_miner.return_idx()} is the winning miner this round.")
+        print(f"\n{winning_miner.return_idx()} is the winning miner for the worker block this round.")
         block_to_propagate = winning_miner.return_mined_block()
         # winning miner receives mining rewards
         winning_miner.receive_rewards(block_to_propagate.return_mining_rewards())
@@ -478,7 +475,7 @@ if __name__=="__main__":
         # actually, in this system fork can still happen - two nodes have the same length of different chain for their peers in different network group to sync. But they should eventually catch up
         # winning miner adds this block to its own chain
         winning_miner.add_block(block_to_propagate)
-        print(f"Winning miner {winning_miner.return_idx()} will propagate its block.")
+        print(f"Winning miner {winning_miner.return_idx()} will propagate its worker block.")
 
         # miner propogate the winning block (just let other miners in its peer list receive it, verify it and add to the blockchain)
         # update peer list
@@ -520,7 +517,7 @@ if __name__=="__main__":
                         miner.update_model_after_chain_resync()
             if miner.is_online():
                 # miner.set_block_to_add(block_to_propagate)
-                print(f"\n{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} is accepting propagated block.")
+                print(f"\n{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} is accepting propagated worker block.")
                 miner.receive_propagated_block(block_to_propagate)
                 if miner.return_propagated_block():
                     verified_block = miner.verify_block(miner.return_propagated_block(), winning_miner.return_idx())
@@ -541,7 +538,7 @@ if __name__=="__main__":
                         #     debug_propagated_block_list.append(False)
                         #     miner.verify_block(miner.return_propagated_block())
                         miner.toss_propagated_block()
-                        print("Received propagated block is either invalid or does not fit this chain. In real implementation, the miners may continue to mine the block. In here, we just simply pass to the next miner. We can assume at least one miner will receive a valid block in this analysis model.")
+                        print("Received propagated worker block is either invalid or does not fit this chain. In real implementation, the miners may continue to mine the block. In here, we just simply pass to the next miner. We can assume at least one miner will receive a valid block in this analysis model.")
                 # may go offline
                 miner.online_switcher()
             else:
@@ -560,14 +557,14 @@ if __name__=="__main__":
                         miner.update_model_after_chain_resync()
             if miner.is_online():
                 if miner.return_has_added_block(): # TODO
-                    print(f"\n{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} is requesting its workers to download a new block.")
+                    print(f"\n{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} is requesting its workers to download a new worker block.")
                     block_to_send = miner.return_blockchain_object().return_last_block()
                     associated_workers = miner.return_associated_workers()
                     if not associated_workers:
-                        print(f"No workers are associated with miner {miner.return_idx()} for this communication round.")
+                        print(f"No workers are associated with miner {miner.return_idx()} to accept the worker block.")
                         continue
                     for worker in associated_workers:
-                        print(f"\n{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} is requesting {worker.return_idx()} to download...")
+                        print(f"\n{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} is requesting worker {worker.return_idx()} to download...")
                         if not worker.is_online():
                             worker.online_switcher()
                             if worker.is_back_online():
@@ -640,7 +637,11 @@ if __name__=="__main__":
         # after all, they are still taking chances to send their validations to the miners
         # workers send their accuracies to validators and validators record the accuracies in a block
         # iterating validator is easier than iterating worker because of the creation of the validator block
-        for validator in validators_this_round:
+
+        print("Begin validator rounds.")
+        # validators request accuracies from the workers in their peer lists
+        for validator_iter in range(len(validators_this_round)):
+            validator = validators_this_round[validator_iter]
             if validator.is_online():
                 # update peer list
                 if not validator.update_peer_list(args['verbose']):
@@ -652,13 +653,14 @@ if __name__=="__main__":
                 if validator.pow_resync_chain(args['verbose']):
                     validator.update_model_after_chain_resync()
                 last_block_on_validator_chain = validator.return_blockchain_object().return_last_block()
+                print(f"{validator.return_idx()} - validator {validator_iter+1}/{len(validators_this_round)} accepting workers' accuracies...")
                 # check last block
                 if last_block_on_validator_chain == None or last_block_on_validator_chain.is_validator_block():
                     print("last block ineligible to be operated")
                     continue
                 online_workers_in_peer_list = validator.return_online_workers()
                 if not online_workers_in_peer_list:
-                    print(f"Cannot find online workers in {worker.return_idx()} peer list.")
+                    print(f"Cannot find online workers in {validator.return_idx()} peer list.")
                     continue
 
                 # validator_candidate_block = Block(idx=validator.blockchain.return_chain_length()+1, is_validator_block=True)
@@ -681,11 +683,16 @@ if __name__=="__main__":
                 if finally_no_associated_miner:
                     print(f"Cannot find a online miner in {validator.return_idx()} peer list.")
                     continue
+                else:
+                    print(f"Validator {validator.return_idx()} associated with miner {associated_miner.return_idx()}")
                 associated_miner.add_validator_to_association(validator)
                 # may go offline
-                validator.online_switcher() 
+                validator.online_switcher()
+            else:
+                print(f"{validator.return_idx()} - validator {validator_iter+1}/{len(validators_this_round)} is offline") 
                 
         # miners accept validators' transactions and broadcast to other miners
+        print()
         for miner_iter in range(len(miners_this_round)):
             miner = miners_this_round[miner_iter]
             if not miner.is_online():
@@ -713,9 +720,11 @@ if __name__=="__main__":
                     continue
                 for validator in associated_validators:
                     if validator.is_online():
-                        miner.add_unconfirmmed_transaction(validator.return_validations_and_signature(comm_round))
+                        miner.add_unconfirmmed_transaction(validator.return_validations_and_signature(comm_round), validator.return_idx())
                     else:
                         potential_offline_validators.add(validator)
+                        if args["verbose"]:
+                            print(f"validator {validator.return_idx()} is offline when accepting transaction. Removed from peer list.")
                 miner.remove_peers(potential_offline_validators)
                 if not miner.return_unconfirmmed_transactions():
                     print("Validators offline or disconnected while transmitting validations.")
@@ -726,10 +735,14 @@ if __name__=="__main__":
                     miner.broadcast_transactions()
                 if miner.is_online():
                     miner.online_switcher()
+            else:
+                print(f"{miner.return_idx()} - miner {worker_iter+1}/{len(workers_this_round)} is offline")
 
         # miners do self and cross-validation(only validating signature at this moment)
+        print()
         block_generation_time_spent = {}
-        for miner in miners_this_round:
+        for miner_iter in range(len(miners_this_round)):
+            miner = miners_this_round[miner_iter]
             if not miner.is_online():
                 miner.online_switcher()
                 if miner.is_back_online():
@@ -738,50 +751,65 @@ if __name__=="__main__":
             if miner.is_online():
                 last_block_on_miner_chain = miner.return_blockchain_object().return_last_block()
                 # check last block
+                # though miner could still mine this block, but if it finds itself cannot add this mined block, it's unwilling to mine
                 if last_block_on_miner_chain==None or last_block_on_miner_chain.is_validator_block():
                     print("last block ineligible to be operated")
                     continue
-                if miner.return_associated_validators():
-                    start_time = time.time()
-                    # block index starts from 1
-                    candidate_block = Block(idx=miner.return_blockchain_object().return_chain_length()+1, miner_pub_key=miner.return_rsa_pub_key(), is_validator_block=True)
-                    # self verification
-                    for unconfirmmed_transaction in miner.return_unconfirmmed_transactions():
+                start_time = time.time()
+                # block index starts from 1
+                candidate_block = Block(idx=miner.return_blockchain_object().return_chain_length()+1, miner_pub_key=miner.return_rsa_pub_key(), is_validator_block=True)
+                # self verification
+                unconfirmmed_transactions = miner.return_unconfirmmed_transactions()
+                if unconfirmmed_transactions:
+                    print(f"\n{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} doing self verification...")
+                else:
+                    print(f"\nNo recorded transactions by {miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} will not do self verification.")
+                for unconfirmmed_transaction in miner.return_unconfirmmed_transactions():
+                    if miner.verify_transaction_by_signature(unconfirmmed_transaction):
+                        unconfirmmed_transaction['tx_verified_by'] = miner.return_idx()
+                        # TODO any idea?
+                        unconfirmmed_transaction['mining_rewards'] = rewards
+                        candidate_block.add_verified_transaction(unconfirmmed_transaction)
+                        miner.receive_rewards(rewards)
+                # cross verification
+                accepted_broadcasted_transactions = miner.return_accepted_broadcasted_transactions()
+                if accepted_broadcasted_transactions:
+                    print(f"{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} doing cross verification...")
+                else:
+                    print(f"No broadcasted transactions have been recorded by {miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} will not do cross verification.")
+                for unconfirmmed_transactions in miner.return_accepted_broadcasted_transactions():
+                    for unconfirmmed_transaction in unconfirmmed_transactions:
                         if miner.verify_transaction_by_signature(unconfirmmed_transaction):
                             unconfirmmed_transaction['tx_verified_by'] = miner.return_idx()
                             # TODO any idea?
                             unconfirmmed_transaction['mining_rewards'] = rewards
                             candidate_block.add_verified_transaction(unconfirmmed_transaction)
-                            miner.receive_rewards(rewards)
-                    # cross verification
-                    for unconfirmmed_transactions in miner.return_accepted_broadcasted_transactions():
-                        for unconfirmmed_transaction in unconfirmmed_transactions:
-                            if miner.verify_transaction_by_signature(unconfirmmed_transaction):
-                                unconfirmmed_transaction['tx_verified_by'] = miner.return_idx()
-                                # TODO any idea?
-                                unconfirmmed_transaction['mining_rewards'] = rewards
-                                candidate_block.add_verified_transaction(unconfirmmed_transaction)
-                                miner.receive_rewards(rewards) 
-                    # mine the block
-                    if candidate_block.return_transactions():
-                        # add previous hash(last block had been checked above)
-                        candidate_block.set_previous_block_hash(miner.return_blockchain_object().return_last_block().compute_hash(hash_entire_block=True))
-                        # mine the candidate block by PoW, inside which the block_hash is also set
-                        mined_block = miner.proof_of_work(candidate_block)
-                    else:
-                        print("No transaction to mine for this block.")
-                        continue
-                    # unfortunately may go offline
-                    if miner.online_switcher():
-                        # record mining time
-                        try:
-                            block_generation_time_spent[miner] = (time.time() - start_time)/(miner.return_computation_power())
-                        except:
-                            block_generation_time_spent[miner] = float('inf')
-                        mined_block.set_mining_rewards(rewards)
-                        # sign the block
-                        miner.sign_block(mined_block)
-                        miner.set_mined_block(mined_block)
+                            miner.receive_rewards(rewards) 
+                # mine the block
+                if candidate_block.return_transactions():
+                    print(f"{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} mining the validator block...")
+                    # add previous hash(last block had been checked above)
+                    candidate_block.set_previous_block_hash(miner.return_blockchain_object().return_last_block().compute_hash(hash_entire_block=True))
+                    # mine the candidate block by PoW, inside which the block_hash is also set
+                    mined_block = miner.proof_of_work(candidate_block)
+                else:
+                    print("No transaction to mine for this block.")
+                    continue
+                # unfortunately may go offline
+                if miner.online_switcher():
+                    # record mining time
+                    try:
+                        block_generation_time_spent[miner] = (time.time() - start_time)/(miner.return_computation_power())
+                        print(f"{miner.return_idx()} - miner mines a validator block in {block_generation_time_spent[miner]} seconds.")
+                    except:
+                        block_generation_time_spent[miner] = float('inf')
+                        print(f"{miner.return_idx()} - miner mines a validator block in INFINITE time...")
+                    mined_block.set_mining_rewards(rewards)
+                    # sign the block
+                    miner.sign_block(mined_block)
+                    miner.set_mined_block(mined_block)
+            else:
+                print(f"{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} is offline.")
 
         # if not check_network_eligibility():
             # print("Go to the next round.\n")
@@ -790,13 +818,14 @@ if __name__=="__main__":
         try:
             winning_miner = min(block_generation_time_spent.keys(), key=(lambda miner: block_generation_time_spent[miner]))
         except:
-            print("No block is generated in this round. Skip to the next round.")
+            print("No validator block is generated in this round. Skip to the next round.")
             continue
         
-        validation_block_to_propagate = winning_miner.return_mined_block()
+        print(f"\n{winning_miner.return_idx()} is the winning miner for the validator block this round.")
+        validator_block_to_propagate = winning_miner.return_mined_block()
         winning_miner.receive_rewards(block_to_propagate.return_mining_rewards())
-        winning_miner.add_block(validation_block_to_propagate)
-        print(f"Winning miner {winning_miner.return_idx()} will propagate its validation block.")
+        winning_miner.add_block(validator_block_to_propagate)
+        print(f"Winning miner {winning_miner.return_idx()} will propagate its validator block.")
 
         if not winning_miner.update_peer_list(args['verbose']):
             # peer_list_empty, randomly register with an online node
@@ -805,8 +834,26 @@ if __name__=="__main__":
                 continue
 
         miners_in_winning_miner_subnet = winning_miner.return_miners_eligible_to_continue()
-                
-        for miner in miners_in_winning_miner_subnet:
+            
+        print()
+        if miners_in_winning_miner_subnet:
+            if args["verbose"]:
+                print("Miners in the winning miners subnet are")
+                for miner in miners_in_winning_miner_subnet:
+                    print(f"d_{miner.return_idx().split('_')[-1]}", end=', ')
+                miners_in_other_nets = set(miners_this_round).difference(miners_in_winning_miner_subnet)
+                if miners_in_other_nets:
+                    print("These miners in other subnets will not get this propagated block.")
+                    for miner in miners_in_other_nets:
+                        print(f"d_{miner.return_idx().split('_')[-1]}", end=', ')
+        else:
+            if args["verbose"]:
+                print("THIS SHOULD NOT GET CALLED AS THERE IS AT LEAST THE WINNING MINER ITSELF IN THE LIST.")
+        
+        print()
+        miners_in_winning_miner_subnet = list(miners_in_winning_miner_subnet)
+        for miner_iter in range(len(miners_in_winning_miner_subnet)):
+            miner = miners_in_winning_miner_subnet[miner_iter]
             if miner == winning_miner:
                 continue
             if not miner.is_online():
@@ -816,21 +863,26 @@ if __name__=="__main__":
                         miner.update_model_after_chain_resync()
             if miner.is_online():
                 # miner.set_block_to_add(block_to_propagate)
-                miner.receive_propagated_validation_block(validation_block_to_propagate)
-                if miner.return_propagated_validation_block():
-                    verified_block = miner.verify_block(miner.return_propagated_validation_block(), winning_miner.return_idx())
+                print(f"\n{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} is accepting propagated validator block.")
+                miner.receive_propagated_validator_block(validator_block_to_propagate)
+                if miner.return_propagated_validator_block():
+                    verified_block = miner.verify_block(miner.return_propagated_validator_block(), winning_miner.return_idx())
                     #last_block_hash[miner.return_idx()] = {}
                     if verified_block:
                         miner.add_block(verified_block)
                         pass
                     else:
-                        print("Received propagated validation block is either invalid or does not fit this chain. In real implementation, the miners may continue to mine the block. In here, we just simply pass to the next miner. We can assume at least one miner will receive a valid block in this analysis model.")
+                        miner.toss_ropagated_validator_block()
+                        print("Received propagated validator block is either invalid or does not fit this chain. In real implementation, the miners may continue to mine the block. In here, we just simply pass to the next miner. We can assume at least one miner will receive a valid block in this analysis model.")
                 # may go offline
                 miner.online_switcher()
+            else:
+                print(f"{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} is offline.")
 
-        # miner requests worker and validator to download the validation block
+        # miner requests worker and validator to download the validator block
         # does not matter if the miner did not append block above and send its last block, as it won't be verified
-        for miner in miners_in_winning_miner_subnet:
+        for miner_iter in range(len(miners_in_winning_miner_subnet)):
+            miner = miners_in_winning_miner_subnet[miner_iter]
             if not miner.is_online():
                 miner.online_switcher()
                 if miner.is_back_online():
@@ -838,14 +890,18 @@ if __name__=="__main__":
                         miner.update_model_after_chain_resync()
             if miner.is_online():
                 if miner.return_has_added_block(): # TODO
+                    print(f"\n{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} is requesting its workers and validators to download a new validator block.")
                     block_to_send = miner.return_blockchain_object().return_last_block()
                     associated_workers = miner.return_associated_workers()
                     associated_validators = miner.return_associated_validators()
                     associated_devices = associated_workers.union(associated_validators)
                     if not associated_devices:
-                        print(f"No devices are associated with miner {miner.return_idx()} to accept the validation block.")
+                        print(f"No devices are associated with miner {miner.return_idx()} to accept the validator block.")
                         continue
-                    for device in associated_devices:
+                    associated_devices = list(associated_devices)
+                    for device_iter in range(len(associated_devices)):
+                        device = associated_devices[device_iter]
+                        print(f"\n{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} is requesting device {device_iter+1}/{len(associated_devices)} {device.return_idx()} - {device.return_role()} to download...")
                         if not device.is_online():
                             device.online_switcher()
                             if device.is_back_online():
@@ -853,14 +909,16 @@ if __name__=="__main__":
                                     device.update_model_after_chain_resync()
                         if device.is_online():
                             # worker_last_block_hash[worker.return_idx()] = {}
-                            device.reset_has_added_block()
-                            device.receive_block_from_miner(block_to_send)
+                            device.reset_received_block_from_miner_vars()
+                            device.receive_block_from_miner(block_to_send, miner.return_idx())
                             verified_block = device.verify_block(device.return_received_block_from_miner(), miner.return_idx())
                             if verified_block:
                                 device.add_block(verified_block)
                                 pass
                             else:
+                                device.toss_received_block()
                                 print("Received block from the associated miner is not valid or does not fit its chain. Pass to the next worker.")
+                            device.online_switcher()
                             if device.return_has_added_block():
                                 block_to_propagate = device.return_blockchain_object().return_last_block()
                                 if block_to_propagate.is_validator_block():
