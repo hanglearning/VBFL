@@ -3,6 +3,7 @@ import torch
 from torch.utils.data import TensorDataset
 from torch.utils.data import DataLoader
 from DatasetLoad import DatasetLoad
+from DatasetLoad import AddGaussianNoise
 import random
 import copy
 # https://cryptobook.nakov.com/digital-signatures/rsa-sign-verify-examples
@@ -12,7 +13,7 @@ from hashlib import sha256
 from Blockchain import Blockchain
 
 class Device:
-    def __init__(self, idx, assigned_train_ds, assigned_test_dl, local_batch_size, loss_func, opti, network_stability, net, dev, kick_out_rounds):
+    def __init__(self, idx, assigned_train_ds, assigned_test_dl, local_batch_size, loss_func, opti, network_stability, net, dev, is_malicious, kick_out_rounds):
         self.idx = idx
         self.train_ds = assigned_train_ds
         self.test_dl = assigned_test_dl
@@ -52,6 +53,7 @@ class Device:
         self.kick_out_rounds = kick_out_rounds
         self.worker_accuracy_accross_records = {}
         self.has_added_block = False
+        self.is_malicious = is_malicious
         ''' For workers '''
         self.local_updates_rewards = 0
         self.received_block_from_miner = None
@@ -151,6 +153,9 @@ class Device:
 
     def is_online(self):
         return self.on_line
+
+    def is_malicious(self):
+        return self.is_malicious()
 
     # def phase_out(self):
     #     self.phased_out = True
@@ -768,7 +773,7 @@ class Device:
         return self.mined_block
 
 class DevicesInNetwork(object):
-    def __init__(self, data_set_name, is_iid, batch_size, loss_func, opti, num_devices, network_stability, net, dev, kick_out_rounds, shard_test_data):
+    def __init__(self, data_set_name, is_iid, batch_size, loss_func, opti, num_devices, network_stability, net, dev, kick_out_rounds, shard_test_data, num_malicious):
         self.data_set_name = data_set_name
         self.is_iid = is_iid
         self.batch_size = batch_size
@@ -781,8 +786,9 @@ class DevicesInNetwork(object):
         self.kick_out_rounds = kick_out_rounds
         # self.test_data_loader = None
         self.default_network_stability = network_stability
-        # distribute dataset
         self.shard_test_data = shard_test_data
+        self.num_malicious = num_malicious
+        # distribute dataset
         self.data_set_balanced_allocation()
 
     # distribute the dataset evenly to the devices
@@ -802,15 +808,20 @@ class DevicesInNetwork(object):
         if not self.shard_test_data:
             test_data = torch.tensor(mnist_dataset.test_data)
             test_label = torch.argmax(torch.tensor(mnist_dataset.test_label), dim=1)
-            test_data_loader = DataLoader(TensorDataset( test_data, test_label), batch_size=100, shuffle=False)
+            test_data_loader = DataLoader(TensorDataset(test_data, test_label), batch_size=100, shuffle=False)
         else:
             test_data = mnist_dataset.test_data
             test_label = mnist_dataset.test_label
              # shard test
             shard_size_test = mnist_dataset.test_data_size // self.num_devices // 2
             shards_id_test = np.random.permutation(mnist_dataset.test_data_size // shard_size_test)
-            
+        
+        malicious_nodes_set = []
+        if self.num_malicious:
+            malicious_nodes_set = random.sample(range(self.num_devices), self.num_malicious)
+
         for i in range(self.num_devices):
+            is_malicious = False
             # make it more random by introducing two shards
             shards_id_train1 = shards_id_train[i * 2]
             shards_id_train2 = shards_id_train[i * 2 + 1]
@@ -833,7 +844,11 @@ class DevicesInNetwork(object):
                 local_test_label = torch.argmax(torch.tensor(local_test_label), dim=1)
                 test_data_loader = DataLoader(TensorDataset(torch.tensor(local_test_data), torch.tensor(local_test_label)), batch_size=100, shuffle=False)
             # assign data to a device and put in the devices set
+            if i in malicious_nodes_set:
+                is_malicious = True
+                # add Gussian Noise
+
             device_idx = f'device_{i+1}'
-            a_device = Device(device_idx, TensorDataset(torch.tensor(local_train_data), torch.tensor(local_train_label)), test_data_loader, self.batch_size, self.loss_func, self.opti, self.default_network_stability, self.net, self.dev, self.kick_out_rounds)
+            a_device = Device(device_idx, TensorDataset(torch.tensor(local_train_data), torch.tensor(local_train_label)), test_data_loader, self.batch_size, self.loss_func, self.opti, self.default_network_stability, self.net, self.dev, is_malicious, self.kick_out_rounds)
             # device index starts from 1
             self.devices_set[device_idx] = a_device

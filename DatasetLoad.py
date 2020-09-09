@@ -133,3 +133,15 @@ if __name__=="__main__":
     print('the shape of the test data set is {}'.format(mnistDataSet.test_data.shape))
     print(mnistDataSet.train_label[0:100], mnistDataSet.train_label[11000:11100])
 
+# add Gussian Noise to dataset
+# https://discuss.pytorch.org/t/how-to-add-noise-to-mnist-dataset-when-using-pytorch/59745
+class AddGaussianNoise(object):
+    def __init__(self, mean=0., std=1.):
+        self.std = std
+        self.mean = mean
+        
+    def __call__(self, tensor):
+        return tensor + torch.randn(tensor.size()) * self.std + self.mean
+    
+    def __repr__(self):
+        return self.__class__.__name__ + '(mean={0}, std={1})'.format(self.mean, self.std)

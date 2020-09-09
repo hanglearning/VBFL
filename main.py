@@ -37,6 +37,7 @@ parser.add_argument('-ko', '--kick_out_rounds', type=int, default=5, help='a dev
 parser.add_argument('-ha', '--hard_assign', type=str, default='*,*,*', help='hard assign number of roles in the network, order by worker, miner and validator')
 # parser.add_argument('-la', '--least_assign', type=str, default='*,*,*', help='the assigned number of roles are at least guaranteed in the network')
 parser.add_argument('-st', '--shard_test_data', type=int, default=0, help='it is easy to see the global models are consistent across devices when the test dataset is NOT sharded')
+parser.add_argument('-nm', '--num_malicious', type=int, default=0, help="number of malicious nodes in the network. malicious node's data sets will be introduced Gaussian noise")
 
 # def flattern_2d_to_1d(arr):
 #     final_set = set()
@@ -151,8 +152,16 @@ if __name__=="__main__":
         sys.exit("ERROR: Roles assigned to the devices exceed the maximum number of allowed devices in the network.")
 
     # check eligibility
-    if args['num_devices'] < 3:
-        sys.exit("ERROR: There are not enough devices in the network.\n The system needs at least one miner, one worker and one validator to start the operation.\nSystem aborted.")
+    if args['num_devices'] < 2:
+        sys.exit("ERROR: There are not enough devices in the network.\n The system needs at least one miner, one worker and/or one validator to start the operation.\nSystem aborted.")
+
+    num_malicious = args['num_malicious']
+    num_devices = args['num_devices']
+    if num_malicious:
+        if num_malicious > num_devices:
+            sys.exit("ERROR: The number of malicious nodes cannot exceed the total number of devices set in this network")
+        else:
+            print(f"Malicious nodes vs total devices set to {num_devices}/{num_devices} = {(num_devices/num_devices)*100:.2f}%")
 
     # make chechpoint save path
     if not os.path.isdir(args['save_path']):
@@ -179,7 +188,7 @@ if __name__=="__main__":
 
     # TODO - # of malicious nodes, non-even dataset distribution
     # create devices in the network
-    devices_in_network = DevicesInNetwork(data_set_name='mnist', is_iid=args['IID'], batch_size = args['batchsize'], loss_func = loss_func, opti = opti, num_devices=args['num_devices'], network_stability=args['network_stability'], net=net, dev=dev, kick_out_rounds=args['kick_out_rounds'], shard_test_data=args['shard_test_data'])
+    devices_in_network = DevicesInNetwork(data_set_name='mnist', is_iid=args['IID'], batch_size = args['batchsize'], loss_func = loss_func, opti = opti, num_devices=args['num_devices'], network_stability=args['network_stability'], net=net, dev=dev, kick_out_rounds=args['kick_out_rounds'], shard_test_data=args['shard_test_data'], num_malicious=args['num_malicious'])
     # test_data_loader = devices_in_network.test_data_loader
 
     devices_list = list(devices_in_network.devices_set.values())
