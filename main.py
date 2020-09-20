@@ -38,14 +38,15 @@ parser.add_argument('-ha', '--hard_assign', type=str, default='*,*,*', help='har
 # parser.add_argument('-la', '--least_assign', type=str, default='*,*,*', help='the assigned number of roles are at least guaranteed in the network')
 parser.add_argument('-st', '--shard_test_data', type=int, default=0, help='it is easy to see the global models are consistent across devices when the test dataset is NOT sharded')
 parser.add_argument('-nm', '--num_malicious', type=int, default=0, help="number of malicious nodes in the network. malicious node's data sets will be introduced Gaussian noise")
-# parser.add_argument('-vs', '--validator_threshold', type=float, default=0.1, help="a threshold value of accuracy difference to determine malicious worker")
+# parser.add_argument('-vh', '--validator_threshold', type=float, default=0.1, help="a threshold value of accuracy difference to determine malicious worker")
 # use time window and size limit together to determine how many epochs a worker can perform and how many can a validator accept
 parser.add_argument('-vt', '--validator_acception_wait_time', type=float, default=0.0, help="default time window for valitors to accept transactions, in seconds. Either this or -le must be specified.")
-parser.add_argument('-vl', '--validator_total_transactions_size_limit', type=float, default=0.0, help="default total size of the transactions a validator can accept. this partly determines the final block size. Requires -vt to be specified! 0 means no size limit.")
+parser.add_argument('-vs', '--validator_sig_validated_transactions_size_limit', type=float, default=0.0, help="default total size of the transactions a validator can accept. this partly determines the final block size. Requires -vt to be specified! 0 means no size limit.")
+parser.add_argument('-vss', '--validator_size_stop', type=float, default=35000.0, help="when validator_sig_validated_transactions_size_limit is specified, this value is used to determine that when the remaining buffer of the validator is less than this value, validator stops accepting transactions")
 parser.add_argument('-le', '--default_local_epochs', type=int, default=1, help='local train epoch. Either this or -vt must be specified.')
 parser.add_argument('-mt', '--miner_acception_wait_time', type=float, default=0.0, help="default time window for miners to accept transactions, in seconds. 0 means no time limit")
 parser.add_argument('-ml', '--miner_block_size_limit', type=float, default=0.0, help="default total size of the block for mienrs to begin mining. 0 means no size limit")
-parser.add_argument('-ls', '--link_speed', type=int, default=0, help="This variable is used to simulate transmission delay. Default value 0 means no transmission delay. If set to 1, link speed is randomly initiated between 0 and 1.")
+parser.add_argument('-ls', '--link_speed', type=int, default=0, help="This variable is used to simulate transmission delay. Default value 0 means no transmission delay. If set to 1, link speed is randomly initiated between 0 and 1, meaning seconds spent to transmit 70k bytes - during experiment, one transaction is around 35k bytes")
 parser.add_argument('-cp', '--computation_power', type=int, default=0, help="This variable is used to simulate strength of hardware equipment. The calculation time will be shrunk down by this value. Default value 0 means evenly assign computation power. If set to 1, power is randomly initiated as an int between 0 and 4, both included.")
 # def flattern_2d_to_1d(arr):
 #     final_set = set()
@@ -196,9 +197,9 @@ if __name__=="__main__":
     
     # get validator transaction acception limit
     # validator_acception_wait_time = args['validator_acception_wait_time']
-    # validator_total_transactions_size_limit = args['validator_total_transactions_size_limit']
+    # validator_sig_validated_transactions_size_limit = args['validator_sig_validated_transactions_size_limit']
 
-    # if not (validator_acception_wait_time or validator_total_transactions_size_limit):
+    # if not (validator_acception_wait_time or validator_sig_validated_transactions_size_limit):
     #     sys.exit("ERROR: either -vl or -vl has to be specified, or both.")
     
     # get miner transaction acception limit
@@ -210,7 +211,7 @@ if __name__=="__main__":
 
     # TODO - # of malicious nodes, non-even dataset distribution
     # create devices in the network
-    devices_in_network = DevicesInNetwork(data_set_name='mnist', is_iid=args['IID'], batch_size = args['batchsize'], loss_func = loss_func, opti = opti, num_devices=args['num_devices'], network_stability=args['network_stability'], net=net, dev=dev, knock_out_rounds=args['knock_out_rounds'], shard_test_data=args['shard_test_data'], validator_acception_wait_time=validator_acception_wait_time, validator_total_transactions_size_limit=validator_total_transactions_size_limit, miner_acception_wait_time=miner_acception_wait_time, miner_block_size_limit=miner_block_size_limit, even_link_speed=args['link_speed'], even_computation_power=args['computation_power'], num_malicious=args['num_malicious'])
+    devices_in_network = DevicesInNetwork(data_set_name='mnist', is_iid=args['IID'], batch_size = args['batchsize'], loss_func = loss_func, opti = opti, num_devices=args['num_devices'], network_stability=args['network_stability'], net=net, dev=dev, knock_out_rounds=args['knock_out_rounds'], shard_test_data=args['shard_test_data'], validator_acception_wait_time=args['validator_acception_wait_time'], validator_sig_validated_transactions_size_limit=args['validator_sig_validated_transactions_size_limit'], validator_size_stop = args['validator_size_stop'], miner_acception_wait_time=args['miner_acception_wait_time'], miner_block_size_limit=args['miner_block_size_limit'], even_link_speed=args['link_speed'], even_computation_power=args['computation_power'], num_malicious=args['num_malicious'])
     # test_data_loader = devices_in_network.test_data_loader
 
     devices_list = list(devices_in_network.devices_set.values())
@@ -325,7 +326,7 @@ if __name__=="__main__":
         
         # workers, validators and miners take turns to perform jobs
         
-        ''' Step 1 - workers assign associated miner and validator (and do local updates, which is implemented in later steps) '''
+        ''' Step 1 - workers assign associated miner and validator (and do local updates, but it is implemented in code of step 2) '''
         for worker_iter in range(len(workers_this_round)):
             worker = workers_this_round[worker_iter]
             if worker.is_online():
@@ -347,7 +348,7 @@ if __name__=="__main__":
                     continue
                 associated_miner.add_device_to_association(worker)
                 # worker associates with a validator
-                associated_validator = worker.associate_with_validator("validator")
+                associated_validator = worker.associate_with_device("validator")
                 if not associated_validator:
                     print(f"Cannot find a qualified validator in {worker.return_idx()} peer list.")
                     continue
@@ -357,7 +358,7 @@ if __name__=="__main__":
             else:
                 print(f"{worker.return_idx()} - worker {worker_iter+1}/{len(workers_this_round)} is offline")
         
-        ''' Step 2 - validators accept local updates and broadcast to other validators (workers local_updates() are called in this step)'''
+        ''' Step 2 - validators accept local updates and broadcast to other validators (workers local_updates() are called in this step. If validator limit transaction size, self-verification has to be performed in this loop)'''
         print()
         for validator_iter in range(len(validators_this_round)):
             validator = validators_this_round[validator_iter]
@@ -382,30 +383,135 @@ if __name__=="__main__":
                 # determine the transactions to accept
                 if args['validator_acception_wait_time']:
                     # wati time has specified. let each worker does local_updates till time limit
-                    
+                    validator_link_speed = validator.return_link_speed()
+                    print(f"{validator.return_idx()} - validator {validator_iter+1}/{len(validators_this_round)} link speed {validator.return_link_speed()}")
+                    records_dict = dict.fromkeys(associated_workers, None)
+                    for worker, _ in records_dict.items():
+                        records_dict[worker] = {}
+                    # used for easy sorting
+                    transaction_arrival_queue = {}
                     for worker in associated_workers:
-                    
-
-                    if worker.is_online():
-                        validator.add_unconfirmmed_transaction(worker.return_local_updates_and_signature(comm_round), worker.return_idx())
-                    else:
-                        potential_offline_workers.add(worker)
-                        if args["verbose"]:
-                            print(f"worker {worker.return_idx()} is offline when accepting transaction. Removed from peer list.")
+                        if not worker.return_idx() in validator.return_black_list():
+                            if worker.is_online():
+                                total_time_tracker = 0
+                                epoch_seq = 1
+                                while total_time_tracker < validator.return_validator_acception_wait_time():
+                                    local_update_spent_time = worker.worker_local_update(rewards)
+                                    worker_link_speed = worker.return_link_speed()
+                                    unconfirmed_transaction = worker.return_local_updates_and_signature(comm_round)
+                                    # size in bytes, usually around 35000 bytes per transaction
+                                    unconfirmed_transactions_size = getsizeof(str(unconfirmed_transaction))
+                                    transmission_delay = (unconfirmed_transactions_size/70000)/validator_link_speed if validator_link_speed < worker_link_speed else (unconfirmed_transactions_size/70000)/worker_link_speed
+                                    if local_update_spent_time + transmission_delay > validator.return_validator_acception_wait_time():
+                                        # last transaction sent passes the acception time window
+                                        break
+                                    records_dict[worker][epoch_seq] = {}
+                                    records_dict[worker][epoch_seq]['local_update_time'] = local_update_spent_time
+                                    records_dict[worker][epoch_seq]['transmission_delay'] = transmission_delay
+                                    records_dict[worker][epoch_seq]['local_update_unconfirmed_transaction'] = unconfirmed_transaction
+                                    records_dict[worker][epoch_seq]['local_update_unconfirmed_transaction_size'] = unconfirmed_transactions_size
+                                    if epoch_seq == 1:
+                                        total_time_tracker = local_update_spent_time + transmission_delay
+                                    else:
+                                        total_time_tracker = total_time_tracker - records_dict[worker][epoch_seq - 1]['transmission_delay'] + local_update_spent_time + transmission_delay
+                                    records_dict[worker][epoch_seq]['arrival_time'] = total_time_tracker
+                                    transaction_arrival_queue[total_time_tracker] = {}
+                                    transaction_arrival_queue[total_time_tracker]['worker'] = worker
+                                    transaction_arrival_queue[total_time_tracker]['epoch'] = epoch_seq
+                                    epoch_seq += 1
+                            else:
+                                potential_offline_workers.add(worker)
+                                if args["verbose"]:
+                                    print(f"worker {worker.return_idx()} is offline when accepting transaction. Removed from peer list.")
+                        else:
+                            print(f"worker {worker.return_idx()} in validator {validator.return_idx()}'s black list. This worker's transactions won't be accpeted.")
+                    # workers local updates done by time limit
+                    # begin self-verification, parimarily due to validated_size_limit may be specified
+                    # sort arrival time of all possible transactions
+                    ordered_transaction_arrival_queue = sorted(transaction_arrival_queue.items())
+                    # sig_verified_transactions = []
+                    transaction_size_tracker = 0
+                    validator_stop = False
+                    for transaction_record in ordered_transaction_arrival_queue:
+                        by_worker = transaction_record[-1]['worker']
+                        epoch_seq = transaction_record[-1]['epoch']
+                        transaction_to_verify = records_dict[by_worker][epoch_seq]['local_update_unconfirmed_transaction']
+                        if validator.verify_transaction_by_signature(transaction_to_verify):
+                            # if size is limited
+                            size_limit = args['validator_sig_validated_transactions_size_limit']
+                            if size_limit:
+                                # toss if there are previously accepted transactions from the same worker and the epoch seq was behind
+                                found_same_worker = False
+                                currently_accepted_sig_verified_transaction = copy.copy(validator.return_sig_verified_transactions())
+                                for already_accepted_transaction in currently_accepted_sig_verified_transaction:
+                                    if transaction_to_verify['rsa_pub_key'] == already_accepted_transaction['rsa_pub_key']:
+                                        found_same_worker = True
+                                        # if accepted transaction is from an earlier epoch, toss previously accepted one
+                                        if already_accepted_transaction['local_total_epoch'] < transaction_to_verify['local_total_epoch']:
+                                            # if accept this transaction, will it surpass the size limit
+                                            will_become_size = transaction_size_tracker - records_dict[by_worker][already_accepted_transaction['local_total_epoch']]['local_update_unconfirmed_transaction_size'] + records_dict[by_worker][epoch_seq]['local_update_unconfirmed_transaction_size']
+                                            if will_become_size > size_limit:
+                                                # won't toss the old transaction and won't accept this one
+                                                pass
+                                            else:
+                                                # toss old and add new
+                                                validator.remove(already_accepted_transaction)
+                                                transaction_size_tracker -= records_dict[by_worker][already_accepted_transaction['local_total_epoch']]['local_update_unconfirmed_transaction_size']
+                                                transaction_size_tracker += records_dict[by_worker][epoch_seq]['local_update_unconfirmed_transaction_size']
+                                            if size_limit - transaction_size_tracker < self.return_validator_size_stop():
+                                                # buffer full
+                                                validator_stop = True
+                                                break
+                                            else:
+                                                validator.add_sig_verified_transaction(transaction_to_verify, by_worker.return_idx())
+                                        else:
+                                            # received an obsolte transaction
+                                            pass
+                                transaction_size_tracker += records_dict[by_worker][epoch_seq]['local_update_unconfirmed_transaction_size']
+                                # if transaction_size_tracker > size_limit:
+                                #     break
+                                #sig_verified_transactions.append(transaction_to_verify)
+                                if not found_same_worker:
+                                    # first time see this worker
+                                    # if accept this transaction, will it surpass the size limit
+                                    will_become_size = transaction_size_tracker + records_dict[by_worker][epoch_seq]['local_update_unconfirmed_transaction_size']
+                                    if will_become_size > size_limit:
+                                        # won't accept this one
+                                        pass
+                                    else:
+                                        validator.add_sig_verified_transaction(transaction_to_verify, by_worker.return_idx())
+                                        # check stop
+                            else:
+                                validator.add_sig_verified_transaction(transaction_to_verify, by_worker.return_idx())
+                                #sig_verified_transactions.append(transaction_to_verify)
+                        else:
+                            print(f"transaction arrived at {transaction_record[0]}s by worker {by_worker.return_idx()} at local epoch {epoch_seq} did not pass the signature verification.")
+                else:
+                    # did not specify wait time. every associated worker perform specified number of local epochs
+                    for worker in associated_workers:
+                        if not worker.return_idx() in validator.return_black_list():
+                            if worker.is_online():
+                                pass
+                            else:
+                                potential_offline_workers.add(worker)
+                                if args["verbose"]:
+                                    print(f"worker {worker.return_idx()} is offline when accepting transaction. Removed from peer list.")
+                        else:
+                            print(f"worker {worker.return_idx()} in validator {validator.return_idx()}'s black list. This worker's transactions won't be accpeted.")
                 validator.remove_peers(potential_offline_workers)
-                if not validator.return_unconfirmmed_transactions():
-                    print("Workers offline or disconnected while transmitting updates.")
+                if not validator.return_sig_verified_transactions():
+                    print("Workers offline or disconnected while transmitting updates, or no transaction has been verified by this validator.")
                     continue
                 # broadcast to other validators
                 # may go offline at any point
-                if validator.online_switcher() and validator.return_unconfirmmed_transactions():
-                    validator.broadcast_transactions()
+                if validator.online_switcher() and validator.return_sig_verified_transactions():
+                    validator.broadcast_sig_verified_transaction()
                 if validator.is_online():
                     validator.online_switcher()
             else:
                 print(f"{validator.return_idx()} - validator {worker_iter+1}/{len(workers_this_round)} is offline")
 
-        ''' Step 3 - validators do self and cross-validation(validate signature and evaluate local updates from workers), and associate with a miner'''
+        ''' Step 3 - validators do self and cross-validation(evaluate local updates from workers), and associate with a miner'''
         print()
         for validator_iter in range(len(validators_this_round)):
             validator = validators_this_round[validator_iter]

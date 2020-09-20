@@ -14,7 +14,7 @@ from hashlib import sha256
 from Blockchain import Blockchain
 
 class Device:
-    def __init__(self, idx, assigned_train_ds, assigned_test_dl, local_batch_size, loss_func, opti, network_stability, net, dev, validator_acception_wait_time, validator_total_transactions_size_limit, miner_acception_wait_time, miner_block_size_limit, even_link_speed, even_computation_power, is_malicious, knock_out_rounds):
+    def __init__(self, idx, assigned_train_ds, assigned_test_dl, local_batch_size, loss_func, opti, network_stability, net, dev, validator_acception_wait_time, validator_sig_validated_transactions_size_limit, validator_size_stop, miner_acception_wait_time, miner_block_size_limit, even_link_speed, even_computation_power, is_malicious, knock_out_rounds):
         self.idx = idx
         self.train_ds = assigned_train_ds
         self.test_dl = assigned_test_dl
@@ -70,6 +70,7 @@ class Device:
         self.worker_associated_validator = None
         self.worker_associated_miner = None
         self.local_update_time = None
+        self.local_total_epoch = 0
         ''' For miners '''
         self.miner_associated_worker_set = set()
         self.miner_associated_validator_set = set()
@@ -88,7 +89,10 @@ class Device:
         self.accuracies_this_round = {}
         self.validator_associated_miner = None
         self.validator_acception_wait_time = validator_acception_wait_time
-        self.validator_total_transactions_size_limit = validator_total_transactions_size_limit
+        self.validator_sig_validated_transactions_size_limit = validator_sig_validated_transactions_size_limit
+        self.sig_verified_transactions = None or []
+        self.broadcasted_sig_verified_transactions = None or []
+        self.validator_size_stop = validator_size_stop
         # self.unconfirmmed_validator_transactions = None or []
         # self.broadcasted_validator_transactions = None or []
         
@@ -443,8 +447,8 @@ class Device:
 
     ''' Worker '''
     # TODO change to computation power
-    def worker_local_update(self, local_epochs, rewards):
-        print(f"computation power {self.computation_power}")
+    def worker_local_update(self, rewards, local_epochs=1):
+        print(f"Worker {self.idx} is doing local_update with computation power {self.computation_power} and link speed {round(self.link_speed,3)}")
         self.net.load_state_dict(self.global_parameters, strict=True)
         self.train_dl = DataLoader(self.train_ds, batch_size=self.local_batch_size, shuffle=True)
         # for epoch in range(self.computation_power):
@@ -452,7 +456,7 @@ class Device:
         self.local_update_time = time.time()
         # local worker update by specified epochs
         # usually, if validator acception time is specified, local_epochs should be 1
-        for epoch in range(local_epochs)
+        for epoch in range(local_epochs):
             for data, label in self.train_dl:
                 data, label = data.to(self.dev), label.to(self.dev)
                 preds = self.net(data)
@@ -460,18 +464,20 @@ class Device:
                 loss.backward()
                 self.opti.step()
                 self.opti.zero_grad()
+            self.local_total_epoch += 1
         # local update one epoch done
         try:
             self.local_update_time = (time.time() - self.local_update_time)/self.computation_power
-        else:
+        except:
             self.local_update_time = float('inf')
         self.local_updates_rewards += 1
         self.receive_rewards(rewards)
         print("Done")
-        self.local_train_parameters = self.net.state_dict()        
-        
-    def return_local_update_time(self):
+        self.local_train_parameters = self.net.state_dict()
         return self.local_update_time
+        
+    # def return_local_update_time(self):
+    #     return self.local_update_time
 
     def set_accuracy_this_round(self, accuracy):
         self.accuracy_this_round = accuracy
@@ -483,7 +489,7 @@ class Device:
         return self.link_speed
 
     def return_local_updates_and_signature(self, comm_round):
-        local_updates_dict = {'worker_device_idx': self.idx, 'round_number': comm_round, "local_updates_params": copy.deepcopy(self.local_train_parameters), "local_updates_rewards": self.local_updates_rewards, "local_update_spent_time": self.local_update_time, "rsa_pub_key": self.return_rsa_pub_key()}
+        local_updates_dict = {'worker_device_idx': self.idx, 'in_round_number': comm_round, "local_updates_params": copy.deepcopy(self.local_train_parameters), "local_updates_rewards": self.local_updates_rewards, "local_update_spent_time": self.local_update_time, "local_total_epoch": self.local_total_epoch, "rsa_pub_key": self.return_rsa_pub_key()}
         local_updates_dict["signature"] = self.sign_msg(sorted(local_updates_dict.items()))
         return local_updates_dict
 
@@ -495,17 +501,18 @@ class Device:
         self.worker_associated_validator = None
         self.worker_associated_miner = None
         self.local_update_time = None
+        self.local_total_epoch = 0
 
-    def associate_with_validator(self):
-        validators_in_peer_list = set()
-        for peer in self.peer_list:
-            if peer.return_role() == "validator":
-                if not peer.return_idx() in self.black_list:
-                    validators_in_peer_list.add(peer)
-        if not validators_in_peer_list:
-            return False
-        self.worker_associated_validator = random.sample(validators_in_peer_list, 1)[0]
-        return self.worker_associated_validator
+    # def associate_with_validator(self):
+    #     validators_in_peer_list = set()
+    #     for peer in self.peer_list:
+    #         if peer.return_role() == "validator":
+    #             if not peer.return_idx() in self.black_list:
+    #                 validators_in_peer_list.add(peer)
+    #     if not validators_in_peer_list:
+    #         return False
+    #     self.worker_associated_validator = random.sample(validators_in_peer_list, 1)[0]
+    #     return self.worker_associated_validator
 
     def receive_block_from_miner(self, received_block, source_miner):
         if not (received_block.return_mined_by() in self.black_list or source_miner in self.black_list):
@@ -703,6 +710,8 @@ class Device:
         self.has_added_block = False
         self.validator_associated_miner = None
         self.validator_associated_worker_set.clear()
+        self.sig_verified_transactions.clear()
+        self.broadcasted_sig_verified_transactions.clear()
 
     def return_online_workers(self):
         online_workers_in_peer_list = set()
@@ -732,26 +741,27 @@ class Device:
             #     self.receive_rewards(effort_rewards)
     
     def validate_worker_local_update(unconfirmmed_transaction, self):
-        worker_local_update_params = unconfirmmed_transaction["local_updates_params"]
-        # current global model accuracy
-        validator_net = copy.deepcopy(self.net)
-        dev = copy.deepcopy(self.dev)
-        validator_net.load_state_dict(self.global_parameters, strict=True)
-        sum_accu = 0
-        num = 0
-        for data, label in self.test_dl:
-            data, label = data.to(dev), label.to(dev)
-            preds = validator_net(data)
-            preds = torch.argmax(preds, dim=1)
-            sum_accu += (preds == label).float().mean()
-            num += 1
-        current_accuracy = sum_accu / num
-        # accuracy evaluated by worker's update
-        # apply updates to the current global params
-        worker_new_global_params = 
-        sum_parameters = None
+        pass
+        # worker_local_update_params = unconfirmmed_transaction["local_updates_params"]
+        # # current global model accuracy
+        # validator_net = copy.deepcopy(self.net)
+        # dev = copy.deepcopy(self.dev)
+        # validator_net.load_state_dict(self.global_parameters, strict=True)
+        # sum_accu = 0
+        # num = 0
+        # for data, label in self.test_dl:
+        #     data, label = data.to(dev), label.to(dev)
+        #     preds = validator_net(data)
+        #     preds = torch.argmax(preds, dim=1)
+        #     sum_accu += (preds == label).float().mean()
+        #     num += 1
+        # current_accuracy = sum_accu / num
+        # # accuracy evaluated by worker's update
+        # # apply updates to the current global params
+        # worker_new_global_params = 
+        # sum_parameters = None
 
-        evaludated_worker_accuracy_by_own_dataset = 
+        # evaludated_worker_accuracy_by_own_dataset = 
 
     # def record_worker_performance_in_block(self, validator_candidate_block, comm_round, rewards):
     #     kick_out_device_set = set()
@@ -800,10 +810,13 @@ class Device:
         self.validator_associated_miner = random.sample(miners_in_peer_list, 1)[0]
         return self.validator_associated_miner
 
+    def return_validator_acception_wait_time(self):
+        return self.validator_acception_wait_time
+
     ''' miner and validator '''
     def add_device_to_association(self, to_add_device):
         if not to_add_device.return_idx() in self.black_list:
-            vars(self)[f'{self.role}_associated_{to_add_device.return_role()}_set'].add(worker_device)
+            vars(self)[f'{self.role}_associated_{to_add_device.return_role()}_set'].add(to_add_device)
         else:
             print(f"WARNING: {to_add_device.return_idx()} in {self.role} {self.idx}'s black list. Not added by the {self.role}.")
 
@@ -874,8 +887,43 @@ class Device:
         print(f"{self.role} {self.idx} associated with {to_associate_device.return_role()} {to_associate_device.return_idx()}")
         return to_associate_device
 
+    ''' validator '''
+    def add_sig_verified_transaction(self, transaction_to_validate, souce_device_idx):
+        if not souce_device_idx in self.black_list:
+            self.sig_verified_transactions.append(copy.deepcopy(transaction_to_validate))
+            print(f"signature of worker {souce_device_idx}'s transaction has been verified by {self.role} {self.idx}")
+        else:
+            print(f"Source worker {souce_device_idx} is in the black list of {self.role} {self.idx}. Transaction will not be accepted.")
+
+    def remove_sig_verified_transaction(self, transaction_to_remove):
+        self.sig_verified_transactions.remove(transaction_to_remove)
+
+    def return_sig_verified_transactions(self):
+        return self.sig_verified_transactions
+
+    def broadcast_sig_verified_transaction(self):
+        for peer in self.peer_list:
+            if peer.is_online():
+                if peer.return_role() == "validator":
+                    if not peer.return_idx() in self.black_list:
+                        print(f"{self.role} {self.idx} is boardcasting signature verified transactions to {peer.return_role()} {peer.return_idx()}.")
+                        peer.accept_broadcasted_sig_verified_transactions(self, self.sig_verified_transactions)
+                    else:
+                        print(f"Destination validator {peer.return_idx()} is in {self.role} {self.idx}'s black_list. Boardcasting skipped.")
+
+    def accept_broadcasted_sig_verified_transactions(self, source_device, broadcasted_transactions):
+        # discard malicious node
+        if not source_device.return_idx() in self.black_list:
+            self.broadcasted_sig_verified_transactions.append(copy.deepcopy(broadcasted_transactions))
+            print(f"{self.role} {self.idx} has accepted sig verified transactions from {source_device.return_role()} {source_device.return_idx()}")
+        else:
+            print(f"Source {source_device.return_role()} {source_device.return_idx()} is in {self.role} {self.idx}'s black list. Transaction not accepted.")
+
+    def return_validator_size_stop(self):
+        return self.validator_size_stop
+
 class DevicesInNetwork(object):
-    def __init__(self, data_set_name, is_iid, batch_size, loss_func, opti, num_devices, network_stability, net, dev, knock_out_rounds, shard_test_data, validator_acception_wait_time, validator_total_transactions_size_limit, miner_acception_wait_time, miner_block_size_limit, even_link_speed, even_computation_power, num_malicious):
+    def __init__(self, data_set_name, is_iid, batch_size, loss_func, opti, num_devices, network_stability, net, dev, knock_out_rounds, shard_test_data, validator_acception_wait_time, validator_sig_validated_transactions_size_limit, validator_size_stop, miner_acception_wait_time, miner_block_size_limit, even_link_speed, even_computation_power, num_malicious):
         self.data_set_name = data_set_name
         self.is_iid = is_iid
         self.batch_size = batch_size
@@ -889,14 +937,18 @@ class DevicesInNetwork(object):
         # self.test_data_loader = None
         self.default_network_stability = network_stability
         self.shard_test_data = shard_test_data
-        self.validator_acception_wait_time = validator_acception_wait_time
-        self.validator_total_transactions_size_limit = validator_total_transactions_size_limit
-        self.miner_acception_wait_time = miner_acception_wait_time
-        self.miner_block_size_limit = miner_block_size_limit
         self.even_link_speed = even_link_speed
         self.even_computation_power = even_computation_power
         self.num_malicious = num_malicious
         # distribute dataset
+        ''' validator '''
+        self.validator_acception_wait_time = validator_acception_wait_time
+        self.validator_sig_validated_transactions_size_limit = validator_sig_validated_transactions_size_limit
+        self.validator_size_stop = validator_size_stop
+        ''' miner '''
+        self.miner_acception_wait_time = miner_acception_wait_time
+        self.miner_block_size_limit = miner_block_size_limit
+        ''' shard '''
         self.data_set_balanced_allocation()
 
     # distribute the dataset evenly to the devices
@@ -957,6 +1009,6 @@ class DevicesInNetwork(object):
                 # add Gussian Noise
 
             device_idx = f'device_{i+1}'
-            a_device = Device(device_idx, TensorDataset(torch.tensor(local_train_data), torch.tensor(local_train_label)), test_data_loader, self.batch_size, self.loss_func, self.opti, self.default_network_stability, self.net, self.dev, self.validator_acception_wait_time, self.validator_total_transactions_size_limit, self.miner_acception_wait_time, self.miner_block_size_limit, self.even_link_speed, self.even_computation_power, is_malicious, self.knock_out_rounds)
+            a_device = Device(device_idx, TensorDataset(torch.tensor(local_train_data), torch.tensor(local_train_label)), test_data_loader, self.batch_size, self.loss_func, self.opti, self.default_network_stability, self.net, self.dev, self.validator_acception_wait_time, self.validator_sig_validated_transactions_size_limit, self.validator_size_stop, self.miner_acception_wait_time, self.miner_block_size_limit, self.even_link_speed, self.even_computation_power, is_malicious, self.knock_out_rounds)
             # device index starts from 1
             self.devices_set[device_idx] = a_device
