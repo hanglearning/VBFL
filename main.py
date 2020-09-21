@@ -438,7 +438,7 @@ if __name__=="__main__":
                         transaction_to_verify = records_dict[by_worker][epoch_seq]['local_update_unconfirmed_transaction']
                         if validator.verify_worker_transaction_by_signature(transaction_to_verify):
                             transaction_to_verify['initial_sig_verified_by_validator'] = validator.return_idx()
-                            transaction_to_verify['initial_sig_verification_validator_rewards'] = rewards
+                            # transaction_to_verify['initial_sig_verification_validator_rewards'] = rewards
                             # toss if there are previously accepted transactions from the same worker and the epoch seq was behind
                             currently_accepted_sig_verified_transactions = copy.copy(validator.return_sig_verified_transactions())
                             first_time_worker = True
@@ -448,6 +448,7 @@ if __name__=="__main__":
                                     # if accepted transaction is from an earlier epoch, toss previously accepted one
                                     if already_accepted_transaction['local_total_accumulated_epochs_this_round'] < transaction_to_verify['local_total_accumulated_epochs_this_round']:
                                         # toss
+                                        # TODO WRONG! should not toss here, but at miner's end! If tossing by miners, miner needs to accumulate validator rewards... # wait, should not actually toss, but mark a previous epoch transaction as cannot be used by devices, as we need to record rewards on those transactions, and we need to have ways to track back. Therefore, transactions also cannot display accumulated rewards
                                         validator.remove_sig_verified_transaction(already_accepted_transaction)
                                         #transaction_size_tracker -= records_dict[by_worker][already_accepted_transaction['local_total_epoch']]['local_update_unconfirmed_transaction_size']
                                         # add
@@ -497,7 +498,7 @@ if __name__=="__main__":
                         transaction_to_verify = transaction_record[-1]
                         if validator.verify_worker_transaction_by_signature(transaction_to_verify):
                             transaction_to_verify['initial_sig_verified_by_validator'] = validator.return_idx()
-                            transaction_to_verify['initial_sig_verification_validator_rewards'] = rewards
+                            # transaction_to_verify['initial_sig_verification_validator_rewards'] = rewards
                             validator.add_sig_verified_transaction(transaction_to_verify, transaction_to_verify['worker_device_idx'])
                         # validator.receive_rewards(rewards)
                 validator.remove_peers(potential_offline_workers)
