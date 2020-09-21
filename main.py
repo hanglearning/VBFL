@@ -41,11 +41,11 @@ parser.add_argument('-nm', '--num_malicious', type=int, default=0, help="number 
 # parser.add_argument('-vh', '--validator_threshold', type=float, default=0.1, help="a threshold value of accuracy difference to determine malicious worker")
 # use time window and size limit together to determine how many epochs a worker can perform and how many can a validator accept
 parser.add_argument('-vt', '--validator_acception_wait_time', type=float, default=0.0, help="default time window for valitors to accept transactions, in seconds. Either this or -le must be specified.")
-parser.add_argument('-vs', '--validator_sig_validated_transactions_size_limit', type=float, default=0.0, help="default total size of the transactions a validator can accept. this partly determines the final block size. Requires -vt to be specified! 0 means no size limit.")
-parser.add_argument('-vss', '--validator_size_stop', type=float, default=35000.0, help="when validator_sig_validated_transactions_size_limit is specified, this value is used to determine that when the remaining buffer of the validator is less than this value, validator stops accepting transactions")
-parser.add_argument('-le', '--default_local_epochs', type=int, default=1, help='local train epoch. Either this or -vt must be specified.')
-parser.add_argument('-mt', '--miner_acception_wait_time', type=float, default=0.0, help="default time window for miners to accept transactions, in seconds. 0 means no time limit")
-parser.add_argument('-ml', '--miner_block_size_limit', type=float, default=0.0, help="default total size of the block for mienrs to begin mining. 0 means no size limit")
+# parser.add_argument('-vs', '--validator_sig_validated_transactions_size_limit', type=float, default=0.0, help="default total size of the transactions a validator can accept. this partly determines the final block size. Requires -vt to be specified! 0 means no size limit.")
+# parser.add_argument('-vss', '--validator_size_stop', type=float, default=35000.0, help="when validator_sig_validated_transactions_size_limit is specified, this value is used to determine that when the remaining buffer of the validator is less than this value, validator stops accepting transactions")
+parser.add_argument('-le', '--default_local_epochs', type=int, default=1, help='local train epoch. Train local model by this num of epochs for each worker, if -vt is not specified')
+parser.add_argument('-mt', '--miner_acception_wait_time', type=float, default=0.0, help="default time window for miners to accept transactions, in seconds. 0 means no time limit. either this or -ml has to be specified, or both")
+parser.add_argument('-ml', '--miner_accepted_transactions_size_limit', type=float, default=35000.0, help="no further transactions will be accepted by miner after this limit. 0 means no size limit. either this or -mt has to be specified, or both. This param determines the final block_size")
 parser.add_argument('-ls', '--link_speed', type=int, default=0, help="This variable is used to simulate transmission delay. Default value 0 means no transmission delay. If set to 1, link speed is randomly initiated between 0 and 1, meaning seconds spent to transmit 70k bytes - during experiment, one transaction is around 35k bytes")
 parser.add_argument('-cp', '--computation_power', type=int, default=0, help="This variable is used to simulate strength of hardware equipment. The calculation time will be shrunk down by this value. Default value 0 means evenly assign computation power. If set to 1, power is randomly initiated as an int between 0 and 4, both included.")
 # def flattern_2d_to_1d(arr):
@@ -204,14 +204,14 @@ if __name__=="__main__":
     
     # get miner transaction acception limit
     # miner_acception_wait_time = args['miner_acception_wait_time']
-    # miner_block_size_limit = args['miner_block_size_limit']
+    # miner_accepted_transactions_size_limit = args['miner_accepted_transactions_size_limit']
 
-    # if not (miner_acception_wait_time or miner_block_size_limit):
+    # if not (miner_acception_wait_time or miner_accepted_transactions_size_limit):
     #     sys.exit("ERROR: either -mt or -ml has to be specified, or both.")
 
     # TODO - # of malicious nodes, non-even dataset distribution
     # create devices in the network
-    devices_in_network = DevicesInNetwork(data_set_name='mnist', is_iid=args['IID'], batch_size = args['batchsize'], loss_func = loss_func, opti = opti, num_devices=args['num_devices'], network_stability=args['network_stability'], net=net, dev=dev, knock_out_rounds=args['knock_out_rounds'], shard_test_data=args['shard_test_data'], validator_acception_wait_time=args['validator_acception_wait_time'], validator_sig_validated_transactions_size_limit=args['validator_sig_validated_transactions_size_limit'], validator_size_stop = args['validator_size_stop'], miner_acception_wait_time=args['miner_acception_wait_time'], miner_block_size_limit=args['miner_block_size_limit'], even_link_speed=args['link_speed'], even_computation_power=args['computation_power'], num_malicious=args['num_malicious'])
+    devices_in_network = DevicesInNetwork(data_set_name='mnist', is_iid=args['IID'], batch_size = args['batchsize'], loss_func = loss_func, opti = opti, num_devices=args['num_devices'], network_stability=args['network_stability'], net=net, dev=dev, knock_out_rounds=args['knock_out_rounds'], shard_test_data=args['shard_test_data'], validator_acception_wait_time=args['validator_acception_wait_time'], validator_sig_validated_transactions_size_limit=args['validator_sig_validated_transactions_size_limit'], validator_size_stop = args['validator_size_stop'], miner_acception_wait_time=args['miner_acception_wait_time'], miner_accepted_transactions_size_limit=args['miner_accepted_transactions_size_limit'], even_link_speed=args['link_speed'], even_computation_power=args['computation_power'], num_malicious=args['num_malicious'])
     # test_data_loader = devices_in_network.test_data_loader
 
     devices_list = list(devices_in_network.devices_set.values())
@@ -431,59 +431,40 @@ if __name__=="__main__":
                     ordered_transaction_arrival_queue = sorted(transaction_arrival_queue.items())
                     # sig_verified_transactions = []
                     transaction_size_tracker = 0
-                    validator_stop = False
                     for transaction_record in ordered_transaction_arrival_queue:
                         by_worker = transaction_record[-1]['worker']
                         epoch_seq = transaction_record[-1]['epoch']
                         transaction_to_verify = records_dict[by_worker][epoch_seq]['local_update_unconfirmed_transaction']
                         if validator.verify_transaction_by_signature(transaction_to_verify):
-                            # if size is limited
+                            # toss if there are previously accepted transactions from the same worker and the epoch seq was behind
+                            currently_accepted_sig_verified_transaction = copy.copy(validator.return_sig_verified_transactions())
+                            for already_accepted_transaction in currently_accepted_sig_verified_transaction:
+                                if transaction_to_verify['rsa_pub_key'] == already_accepted_transaction['rsa_pub_key']:
+                                    # if accepted transaction is from an earlier epoch, toss previously accepted one
+                                    if already_accepted_transaction['local_total_epoch'] < transaction_to_verify['local_total_epoch']:
+                                        # toss
+                                        validator.remove(already_accepted_transaction)
+                                        transaction_size_tracker -= records_dict[by_worker][already_accepted_transaction['local_total_epoch']]['local_update_unconfirmed_transaction_size']
+                                        # add
+                                        validator.add_sig_verified_transaction(transaction_to_verify, by_worker.return_idx())
+                                        transaction_size_tracker += records_dict[by_worker][epoch_seq]['local_update_unconfirmed_transaction_size']
+                                    else:
+                                        # received an obsolte transaction
+                                        pass
+                                else:
+                                    # first time see this worker
+                                    validator.add_sig_verified_transaction(transaction_to_verify, by_worker.return_idx())
+                                    transaction_size_tracker += records_dict[by_worker][epoch_seq]['local_update_unconfirmed_transaction_size']
+                            # # if size is limited
                             size_limit = args['validator_sig_validated_transactions_size_limit']
                             if size_limit:
-                                # toss if there are previously accepted transactions from the same worker and the epoch seq was behind
-                                found_same_worker = False
-                                currently_accepted_sig_verified_transaction = copy.copy(validator.return_sig_verified_transactions())
-                                for already_accepted_transaction in currently_accepted_sig_verified_transaction:
-                                    if transaction_to_verify['rsa_pub_key'] == already_accepted_transaction['rsa_pub_key']:
-                                        found_same_worker = True
-                                        # if accepted transaction is from an earlier epoch, toss previously accepted one
-                                        if already_accepted_transaction['local_total_epoch'] < transaction_to_verify['local_total_epoch']:
-                                            # if accept this transaction, will it surpass the size limit
-                                            will_become_size = transaction_size_tracker - records_dict[by_worker][already_accepted_transaction['local_total_epoch']]['local_update_unconfirmed_transaction_size'] + records_dict[by_worker][epoch_seq]['local_update_unconfirmed_transaction_size']
-                                            if will_become_size > size_limit:
-                                                # won't toss the old transaction and won't accept this one
-                                                pass
-                                            else:
-                                                # toss old and add new
-                                                validator.remove(already_accepted_transaction)
-                                                transaction_size_tracker -= records_dict[by_worker][already_accepted_transaction['local_total_epoch']]['local_update_unconfirmed_transaction_size']
-                                                transaction_size_tracker += records_dict[by_worker][epoch_seq]['local_update_unconfirmed_transaction_size']
-                                            if size_limit - transaction_size_tracker < self.return_validator_size_stop():
-                                                # buffer full
-                                                validator_stop = True
-                                                break
-                                            else:
-                                                validator.add_sig_verified_transaction(transaction_to_verify, by_worker.return_idx())
-                                        else:
-                                            # received an obsolte transaction
-                                            pass
-                                transaction_size_tracker += records_dict[by_worker][epoch_seq]['local_update_unconfirmed_transaction_size']
-                                # if transaction_size_tracker > size_limit:
-                                #     break
-                                #sig_verified_transactions.append(transaction_to_verify)
-                                if not found_same_worker:
-                                    # first time see this worker
-                                    # if accept this transaction, will it surpass the size limit
-                                    will_become_size = transaction_size_tracker + records_dict[by_worker][epoch_seq]['local_update_unconfirmed_transaction_size']
-                                    if will_become_size > size_limit:
-                                        # won't accept this one
-                                        pass
-                                    else:
-                                        validator.add_sig_verified_transaction(transaction_to_verify, by_worker.return_idx())
-                                        # check stop
+                                # check if buffer full to stop accepting. allow a bit surpass
+                                if transaction_size_tracker > size_limit:
+                                    print("Size limit has been reached. Stop accepting further transactions.")
+                                    break
                             else:
-                                validator.add_sig_verified_transaction(transaction_to_verify, by_worker.return_idx())
-                                #sig_verified_transactions.append(transaction_to_verify)
+                                # go go go
+                                continue
                         else:
                             print(f"transaction arrived at {transaction_record[0]}s by worker {by_worker.return_idx()} at local epoch {epoch_seq} did not pass the signature verification.")
                 else:

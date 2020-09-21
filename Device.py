@@ -14,7 +14,7 @@ from hashlib import sha256
 from Blockchain import Blockchain
 
 class Device:
-    def __init__(self, idx, assigned_train_ds, assigned_test_dl, local_batch_size, loss_func, opti, network_stability, net, dev, validator_acception_wait_time, validator_sig_validated_transactions_size_limit, validator_size_stop, miner_acception_wait_time, miner_block_size_limit, even_link_speed, even_computation_power, is_malicious, knock_out_rounds):
+    def __init__(self, idx, assigned_train_ds, assigned_test_dl, local_batch_size, loss_func, opti, network_stability, net, dev, validator_acception_wait_time, validator_sig_validated_transactions_size_limit, validator_size_stop, miner_acception_wait_time, miner_accepted_transactions_size_limit, even_link_speed, even_computation_power, is_malicious, knock_out_rounds):
         self.idx = idx
         self.train_ds = assigned_train_ds
         self.test_dl = assigned_test_dl
@@ -81,7 +81,7 @@ class Device:
         self.received_propagated_block = None
         self.received_propagated_validator_block = None
         self.miner_acception_wait_time = miner_acception_wait_time
-        self.miner_block_size_limit = miner_block_size_limit
+        self.miner_accepted_transactions_size_limit = miner_accepted_transactions_size_limit
         # self.block_to_add = None
         ''' For validators '''
         self.validator_associated_worker_set = set()
@@ -923,7 +923,7 @@ class Device:
         return self.validator_size_stop
 
 class DevicesInNetwork(object):
-    def __init__(self, data_set_name, is_iid, batch_size, loss_func, opti, num_devices, network_stability, net, dev, knock_out_rounds, shard_test_data, validator_acception_wait_time, validator_sig_validated_transactions_size_limit, validator_size_stop, miner_acception_wait_time, miner_block_size_limit, even_link_speed, even_computation_power, num_malicious):
+    def __init__(self, data_set_name, is_iid, batch_size, loss_func, opti, num_devices, network_stability, net, dev, knock_out_rounds, shard_test_data, validator_acception_wait_time, validator_sig_validated_transactions_size_limit, validator_size_stop, miner_acception_wait_time, miner_accepted_transactions_size_limit, even_link_speed, even_computation_power, num_malicious):
         self.data_set_name = data_set_name
         self.is_iid = is_iid
         self.batch_size = batch_size
@@ -947,7 +947,7 @@ class DevicesInNetwork(object):
         self.validator_size_stop = validator_size_stop
         ''' miner '''
         self.miner_acception_wait_time = miner_acception_wait_time
-        self.miner_block_size_limit = miner_block_size_limit
+        self.miner_accepted_transactions_size_limit = miner_accepted_transactions_size_limit
         ''' shard '''
         self.data_set_balanced_allocation()
 
@@ -1009,6 +1009,6 @@ class DevicesInNetwork(object):
                 # add Gussian Noise
 
             device_idx = f'device_{i+1}'
-            a_device = Device(device_idx, TensorDataset(torch.tensor(local_train_data), torch.tensor(local_train_label)), test_data_loader, self.batch_size, self.loss_func, self.opti, self.default_network_stability, self.net, self.dev, self.validator_acception_wait_time, self.validator_sig_validated_transactions_size_limit, self.validator_size_stop, self.miner_acception_wait_time, self.miner_block_size_limit, self.even_link_speed, self.even_computation_power, is_malicious, self.knock_out_rounds)
+            a_device = Device(device_idx, TensorDataset(torch.tensor(local_train_data), torch.tensor(local_train_label)), test_data_loader, self.batch_size, self.loss_func, self.opti, self.default_network_stability, self.net, self.dev, self.validator_acception_wait_time, self.validator_sig_validated_transactions_size_limit, self.validator_size_stop, self.miner_acception_wait_time, self.miner_accepted_transactions_size_limit, self.even_link_speed, self.even_computation_power, is_malicious, self.knock_out_rounds)
             # device index starts from 1
             self.devices_set[device_idx] = a_device
