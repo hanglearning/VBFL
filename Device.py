@@ -14,7 +14,7 @@ from hashlib import sha256
 from Blockchain import Blockchain
 
 class Device:
-    def __init__(self, idx, assigned_train_ds, assigned_test_dl, local_batch_size, loss_func, opti, network_stability, net, dev, validator_acception_wait_time, validator_sig_validated_transactions_size_limit, validator_size_stop, miner_acception_wait_time, miner_accepted_transactions_size_limit, even_link_speed, even_computation_power, is_malicious, knock_out_rounds):
+    def __init__(self, idx, assigned_train_ds, assigned_test_dl, local_batch_size, loss_func, opti, network_stability, net, dev, validator_acception_wait_time, miner_acception_wait_time, miner_accepted_transactions_size_limit, even_link_speed, even_computation_power, is_malicious, knock_out_rounds):
         self.idx = idx
         self.train_ds = assigned_train_ds
         self.test_dl = assigned_test_dl
@@ -89,10 +89,10 @@ class Device:
         self.accuracies_this_round = {}
         self.validator_associated_miner = None
         self.validator_acception_wait_time = validator_acception_wait_time
-        self.validator_sig_validated_transactions_size_limit = validator_sig_validated_transactions_size_limit
+        # self.validator_sig_validated_transactions_size_limit = validator_sig_validated_transactions_size_limit
         self.sig_verified_transactions = None or []
         self.broadcasted_sig_verified_transactions = None or []
-        self.validator_size_stop = validator_size_stop
+        # self.validator_size_stop = validator_size_stop
         # self.unconfirmmed_validator_transactions = None or []
         # self.broadcasted_validator_transactions = None or []
         
@@ -464,15 +464,17 @@ class Device:
                 loss.backward()
                 self.opti.step()
                 self.opti.zero_grad()
+                self.local_updates_rewards += rewards * (label.shape[0])
+                # self.receive_rewards(rewards)
+                # should calculate rewards only in the block. do it when block is appended
             self.local_total_epoch += 1
         # local update one epoch done
         try:
             self.local_update_time = (time.time() - self.local_update_time)/self.computation_power
         except:
             self.local_update_time = float('inf')
-        self.local_updates_rewards += 1
-        self.receive_rewards(rewards)
-        print("Done")
+        
+        print(f"Done {local_epochs} epoch(s) and total {self.local_total_epoch} epochs")
         self.local_train_parameters = self.net.state_dict()
         return self.local_update_time
         
@@ -489,7 +491,9 @@ class Device:
         return self.link_speed
 
     def return_local_updates_and_signature(self, comm_round):
-        local_updates_dict = {'worker_device_idx': self.idx, 'in_round_number': comm_round, "local_updates_params": copy.deepcopy(self.local_train_parameters), "local_updates_rewards": self.local_updates_rewards, "local_update_spent_time": self.local_update_time, "local_total_epoch": self.local_total_epoch, "rsa_pub_key": self.return_rsa_pub_key()}
+        # local_total_accumulated_epochs_this_round also stands for the lastest_epoch_seq for this transaction(local params are calculated after this amount of local epochs in this round)
+        # last_local_iteration(s)_spent_time may be recorded to determine calculating time? But what if nodes do not wish to disclose its computation power
+        local_updates_dict = {'worker_device_idx': self.idx, 'in_round_number': comm_round, "local_updates_params": copy.deepcopy(self.local_train_parameters), "local_updates_accumulated_rewards_this_round": self.local_updates_rewards, "last_local_iteration(s)_spent_time": self.local_update_time, "local_total_accumulated_epochs_this_round": self.local_total_epoch, "rsa_pub_key": self.return_rsa_pub_key()}
         local_updates_dict["signature"] = self.sign_msg(sorted(local_updates_dict.items()))
         return local_updates_dict
 
@@ -614,8 +618,8 @@ class Device:
     def return_accepted_broadcasted_transactions(self):
         return self.broadcasted_transactions
 
-
-    def verify_transaction_by_signature(self, transaction_to_verify, ignore_miner=False):
+    # TODO may have to distinguish btw miner and validator
+    def verify_transaction_by_signature(self, transaction_to_verify, ignore_validator=False, ignore_miner=False):
         try:
             transaction_device_idx = transaction_to_verify['worker_device_idx']
         except:
@@ -628,6 +632,9 @@ class Device:
         if ignore_miner:
             del transaction_before_signed["tx_verified_by"]
             del transaction_before_signed["mining_rewards"]
+        if ignore_validator:
+            del transaction_before_signed["initial_sig_verified_by"]
+            del transaction_before_signed["sig_verification_rewards"]
         modulus = transaction_to_verify['rsa_pub_key']["modulus"]
         pub_key = transaction_to_verify['rsa_pub_key']["pub_key"]
         signature = transaction_to_verify["signature"]
@@ -635,7 +642,7 @@ class Device:
         hash = int.from_bytes(sha256(str(sorted(transaction_before_signed.items())).encode('utf-8')).digest(), byteorder='big')
         hashFromSignature = pow(signature, pub_key, modulus)
         if hash == hashFromSignature:
-            print(f"Transaction from {transaction_device_idx} is verified!")
+            print(f"Signature of transaction from {transaction_device_idx} is verified by {self.role} {self.idx}!")
             return True
         else:
             print(f"Signature invalid. Transaction from {transaction_device_idx} is NOT verified.")
@@ -891,7 +898,7 @@ class Device:
     def add_sig_verified_transaction(self, transaction_to_validate, souce_device_idx):
         if not souce_device_idx in self.black_list:
             self.sig_verified_transactions.append(copy.deepcopy(transaction_to_validate))
-            print(f"signature of worker {souce_device_idx}'s transaction has been verified by {self.role} {self.idx}")
+            print(f"worker {souce_device_idx}'s transaction has been recorded by {self.role} {self.idx}")
         else:
             print(f"Source worker {souce_device_idx} is in the black list of {self.role} {self.idx}. Transaction will not be accepted.")
 
@@ -907,6 +914,7 @@ class Device:
                 if peer.return_role() == "validator":
                     if not peer.return_idx() in self.black_list:
                         print(f"{self.role} {self.idx} is boardcasting signature verified transactions to {peer.return_role()} {peer.return_idx()}.")
+                        # in the real distributed system, it should be broadcasting transaction one by one. Here we send the entire received sig verified transactions
                         peer.accept_broadcasted_sig_verified_transactions(self, self.sig_verified_transactions)
                     else:
                         print(f"Destination validator {peer.return_idx()} is in {self.role} {self.idx}'s black_list. Boardcasting skipped.")
@@ -919,11 +927,31 @@ class Device:
         else:
             print(f"Source {source_device.return_role()} {source_device.return_idx()} is in {self.role} {self.idx}'s black list. Transaction not accepted.")
 
-    def return_validator_size_stop(self):
-        return self.validator_size_stop
+    def verify_worker_transaction_by_signature(self, transaction_to_verify):
+        worker_transaction_device_idx = transaction_to_verify['worker_device_idx']
+        if worker_transaction_device_idx in self.black_list:
+            print(f"{worker_transaction_device_idx} is in validator's blacklist. Trasaction won't get verified.")
+            return False
+        transaction_before_signed = copy.deepcopy(transaction_to_verify)
+        del transaction_before_signed["signature"]
+        modulus = transaction_to_verify['rsa_pub_key']["modulus"]
+        pub_key = transaction_to_verify['rsa_pub_key']["pub_key"]
+        signature = transaction_to_verify["signature"]
+        # verify
+        hash = int.from_bytes(sha256(str(sorted(transaction_before_signed.items())).encode('utf-8')).digest(), byteorder='big')
+        hashFromSignature = pow(signature, pub_key, modulus)
+        if hash == hashFromSignature:
+            print(f"Signature of transaction from worker {worker_transaction_device_idx} is verified by validator {self.idx}!")
+            return True
+        else:
+            print(f"Signature invalid. Transaction from worker {worker_transaction_device_idx} is NOT verified.")
+            return False
+
+    # def return_validator_size_stop(self):
+    #     return self.validator_size_stop
 
 class DevicesInNetwork(object):
-    def __init__(self, data_set_name, is_iid, batch_size, loss_func, opti, num_devices, network_stability, net, dev, knock_out_rounds, shard_test_data, validator_acception_wait_time, validator_sig_validated_transactions_size_limit, validator_size_stop, miner_acception_wait_time, miner_accepted_transactions_size_limit, even_link_speed, even_computation_power, num_malicious):
+    def __init__(self, data_set_name, is_iid, batch_size, loss_func, opti, num_devices, network_stability, net, dev, knock_out_rounds, shard_test_data, validator_acception_wait_time, miner_acception_wait_time, miner_accepted_transactions_size_limit, even_link_speed, even_computation_power, num_malicious):
         self.data_set_name = data_set_name
         self.is_iid = is_iid
         self.batch_size = batch_size
@@ -943,8 +971,8 @@ class DevicesInNetwork(object):
         # distribute dataset
         ''' validator '''
         self.validator_acception_wait_time = validator_acception_wait_time
-        self.validator_sig_validated_transactions_size_limit = validator_sig_validated_transactions_size_limit
-        self.validator_size_stop = validator_size_stop
+        # self.validator_sig_validated_transactions_size_limit = validator_sig_validated_transactions_size_limit
+        # self.validator_size_stop = validator_size_stop
         ''' miner '''
         self.miner_acception_wait_time = miner_acception_wait_time
         self.miner_accepted_transactions_size_limit = miner_accepted_transactions_size_limit
@@ -1009,6 +1037,6 @@ class DevicesInNetwork(object):
                 # add Gussian Noise
 
             device_idx = f'device_{i+1}'
-            a_device = Device(device_idx, TensorDataset(torch.tensor(local_train_data), torch.tensor(local_train_label)), test_data_loader, self.batch_size, self.loss_func, self.opti, self.default_network_stability, self.net, self.dev, self.validator_acception_wait_time, self.validator_sig_validated_transactions_size_limit, self.validator_size_stop, self.miner_acception_wait_time, self.miner_accepted_transactions_size_limit, self.even_link_speed, self.even_computation_power, is_malicious, self.knock_out_rounds)
+            a_device = Device(device_idx, TensorDataset(torch.tensor(local_train_data), torch.tensor(local_train_label)), test_data_loader, self.batch_size, self.loss_func, self.opti, self.default_network_stability, self.net, self.dev, self.validator_acception_wait_time, self.miner_acception_wait_time, self.miner_accepted_transactions_size_limit, self.even_link_speed, self.even_computation_power, is_malicious, self.knock_out_rounds)
             # device index starts from 1
             self.devices_set[device_idx] = a_device
