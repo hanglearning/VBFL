@@ -1,5 +1,6 @@
 # fedavg from https://github.com/WHDY/FedAvg/
 # TODO DELETE ALL receive_rewards() and only do it after a block is appended! AND whenever resync chain recalculate rewards!!!
+# TODO redistribute offline() based on very transaction, not at the beginning of every loop
 
 import os
 import sys
@@ -359,7 +360,7 @@ if __name__=="__main__":
             else:
                 print(f"{worker.return_idx()} - worker {worker_iter+1}/{len(workers_this_round)} is offline")
         
-        ''' Step 2 - validators accept local updates and broadcast to other validators (workers local_updates() are called in this step. If validator limit transaction size, self-verification has to be performed in this loop)'''
+        ''' Step 2 - validators accept local updates and broadcast to other validators (workers local_updates() are called in this step.'''
         print()
         for validator_iter in range(len(validators_this_round)):
             validator = validators_this_round[validator_iter]
@@ -382,6 +383,7 @@ if __name__=="__main__":
                     continue
                 # workers local_updates() called here as their updates are restrained by validators' acception time and size
                 validator_link_speed = validator.return_link_speed()
+                # records_dict for debugging purposes
                 records_dict = dict.fromkeys(associated_workers, None)
                 for worker, _ in records_dict.items():
                     records_dict[worker] = {}
@@ -399,26 +401,26 @@ if __name__=="__main__":
                                 while total_time_tracker < validator.return_validator_acception_wait_time():
                                     local_update_spent_time = worker.worker_local_update(rewards)
                                     worker_link_speed = worker.return_link_speed()
-                                    unconfirmed_transaction = worker.return_local_updates_and_signature(comm_round)
+                                    unverified_transaction = worker.return_local_updates_and_signature(comm_round)
                                     # size in bytes, usually around 35000 bytes per transaction
-                                    unconfirmed_transactions_size = getsizeof(str(unconfirmed_transaction))
-                                    transmission_delay = (unconfirmed_transactions_size/70000)/validator_link_speed if validator_link_speed < worker_link_speed else (unconfirmed_transactions_size/70000)/worker_link_speed
+                                    unverified_transactions_size = getsizeof(str(unverified_transaction))
+                                    transmission_delay = (unverified_transactions_size/70000)/validator_link_speed if validator_link_speed < worker_link_speed else (unverified_transactions_size/70000)/worker_link_speed
                                     if local_update_spent_time + transmission_delay > validator.return_validator_acception_wait_time():
                                         # last transaction sent passes the acception time window
                                         break
                                     records_dict[worker][epoch_seq] = {}
                                     records_dict[worker][epoch_seq]['local_update_time'] = local_update_spent_time
                                     records_dict[worker][epoch_seq]['transmission_delay'] = transmission_delay
-                                    records_dict[worker][epoch_seq]['local_update_unconfirmed_transaction'] = unconfirmed_transaction
-                                    records_dict[worker][epoch_seq]['local_update_unconfirmed_transaction_size'] = unconfirmed_transactions_size
+                                    records_dict[worker][epoch_seq]['local_update_unverified_transaction'] = unverified_transaction
+                                    records_dict[worker][epoch_seq]['local_update_unverified_transaction_size'] = unverified_transactions_size
                                     if epoch_seq == 1:
                                         total_time_tracker = local_update_spent_time + transmission_delay
                                     else:
                                         total_time_tracker = total_time_tracker - records_dict[worker][epoch_seq - 1]['transmission_delay'] + local_update_spent_time + transmission_delay
                                     records_dict[worker][epoch_seq]['arrival_time'] = total_time_tracker
-                                    transaction_arrival_queue[total_time_tracker] = {}
-                                    transaction_arrival_queue[total_time_tracker]['worker'] = worker
-                                    transaction_arrival_queue[total_time_tracker]['epoch'] = epoch_seq
+                                    transaction_arrival_queue[total_time_tracker] = unverified_transaction
+                                    # transaction_arrival_queue[total_time_tracker]['worker'] = worker
+                                    # transaction_arrival_queue[total_time_tracker]['epoch'] = epoch_seq
                                     epoch_seq += 1
                             else:
                                 potential_offline_workers.add(worker)
@@ -429,53 +431,12 @@ if __name__=="__main__":
                     # workers local updates done by time limit
                     # begin self-verification, parimarily due to validated_size_limit may be specified
                     # sort arrival time of all possible transactions
-                    ordered_transaction_arrival_queue = sorted(transaction_arrival_queue.items())
-                    # sig_verified_transactions = []
-                    # transaction_size_tracker = 0
-                    for transaction_record in ordered_transaction_arrival_queue:
-                        by_worker = transaction_record[-1]['worker']
-                        epoch_seq = transaction_record[-1]['epoch']
-                        transaction_to_verify = records_dict[by_worker][epoch_seq]['local_update_unconfirmed_transaction']
-                        if validator.verify_worker_transaction_by_signature(transaction_to_verify):
-                            transaction_to_verify['initial_sig_verified_by_validator'] = validator.return_idx()
-                            # transaction_to_verify['initial_sig_verification_validator_rewards'] = rewards
-                            # toss if there are previously accepted transactions from the same worker and the epoch seq was behind
-                            currently_accepted_sig_verified_transactions = copy.copy(validator.return_sig_verified_transactions())
-                            first_time_worker = True
-                            for already_accepted_transaction in currently_accepted_sig_verified_transactions:
-                                if transaction_to_verify['rsa_pub_key'] == already_accepted_transaction['rsa_pub_key']:
-                                    first_time_worker = False
-                                    # if accepted transaction is from an earlier epoch, toss previously accepted one
-                                    if already_accepted_transaction['local_total_accumulated_epochs_this_round'] < transaction_to_verify['local_total_accumulated_epochs_this_round']:
-                                        # toss
-                                        # TODO WRONG! should not toss here, but at miner's end! If tossing by miners, miner needs to accumulate validator rewards... # wait, should not actually toss, but mark a previous epoch transaction as cannot be used by devices, as we need to record rewards on those transactions, and we need to have ways to track back. Therefore, transactions also cannot display accumulated rewards
-                                        validator.remove_sig_verified_transaction(already_accepted_transaction)
-                                        #transaction_size_tracker -= records_dict[by_worker][already_accepted_transaction['local_total_epoch']]['local_update_unconfirmed_transaction_size']
-                                        # add
-                                        validator.add_sig_verified_transaction(transaction_to_verify, by_worker.return_idx())
-                                        #transaction_size_tracker += records_dict[by_worker][epoch_seq]['local_update_unconfirmed_transaction_size']
-                                    else:
-                                        # received an obsolte transaction
-                                        pass
-                            if first_time_worker:    
-                                # first time see this worker
-                                validator.add_sig_verified_transaction(transaction_to_verify, by_worker.return_idx())
-                            #transaction_size_tracker += records_dict[by_worker][epoch_seq]['local_update_unconfirmed_transaction_size']
-                            # # if size is limited
-                            # size_limit = args['validator_sig_validated_transactions_size_limit']
-                            # if size_limit:
-                            #     # check if buffer full to stop accepting. allow a bit surpass
-                            #     if transaction_size_tracker > size_limit:
-                            #         print("Size limit has been reached. Stop accepting further transactions.")
-                            #         break
-                            # else:
-                            #     # go go go
-                            #     continue
-                        else:
-                            print(f"transaction arrived at {transaction_record[0]}s by worker {by_worker.return_idx()} at local epoch {epoch_seq} did not pass the signature verification.")
-                        # reward validator for verifying signature
-                        # should not do it here as this transaction in real system may not get accepted. Do on miners' end
-                        # validator.receive_rewards(rewards)
+                    #ordered_transaction_arrival_queue = sorted(transaction_arrival_queue.items())
+                    #validator.set_unordered_arrival_time_direct_worker_transactions(transaction_arrival_queue)
+                    
+                        # else:
+                        #     print(f"transaction arrived at {transaction_record[0]}s by worker {by_worker.return_idx()} at local epoch {epoch_seq} did not pass the signature verification.")
+                        
                 else:
                     # did not specify wait time. every associated worker perform specified number of local epochs
                     for worker in associated_workers:
@@ -483,44 +444,74 @@ if __name__=="__main__":
                             if worker.is_online():
                                 local_update_spent_time = worker.worker_local_update(rewards, local_epochs=args['default_local_epochs'])
                                 worker_link_speed = worker.return_link_speed()
-                                unconfirmed_transaction = worker.return_local_updates_and_signature(comm_round)
-                                unconfirmed_transactions_size = getsizeof(str(unconfirmed_transaction))
-                                transmission_delay = (unconfirmed_transactions_size/70000)/validator_link_speed if validator_link_speed < worker_link_speed else (unconfirmed_transactions_size/70000)/worker_link_speed
-                                transaction_arrival_queue[local_update_spent_time + transmission_delay] = unconfirmed_transaction
+                                unverified_transaction = worker.return_local_updates_and_signature(comm_round)
+                                unverified_transactions_size = getsizeof(str(unverified_transaction))
+                                transmission_delay = (unverified_transactions_size/70000)/validator_link_speed if validator_link_speed < worker_link_speed else (unverified_transactions_size/70000)/worker_link_speed
+                                transaction_arrival_queue[local_update_spent_time + transmission_delay] = unverified_transaction
                             else:
                                 potential_offline_workers.add(worker)
                                 if args["verbose"]:
                                     print(f"worker {worker.return_idx()} is offline when accepting transactions. Removed from peer list.")
                         else:
                             print(f"worker {worker.return_idx()} in validator {validator.return_idx()}'s black list. This worker's transactions won't be accpeted.")
-                    ordered_transaction_arrival_queue = sorted(transaction_arrival_queue.items())
-                    for transaction_record in ordered_transaction_arrival_queue:
-                        transaction_to_verify = transaction_record[-1]
-                        if validator.verify_worker_transaction_by_signature(transaction_to_verify):
-                            transaction_to_verify['initial_sig_verified_by_validator'] = validator.return_idx()
-                            # transaction_to_verify['initial_sig_verification_validator_rewards'] = rewards
-                            validator.add_sig_verified_transaction(transaction_to_verify, transaction_to_verify['worker_device_idx'])
-                        # validator.receive_rewards(rewards)
+                    #ordered_transaction_arrival_queue = sorted(transaction_arrival_queue.items())
+                validator.set_unordered_arrival_time_direct_worker_transactions(transaction_arrival_queue)
+                # in case validator off line for accepting broadcasted transactions but can later back on line to validate the transactions itself receives
+                validator.set_transaction_for_final_processing_queue(sorted(transaction_arrival_queue.items()))
+
                 validator.remove_peers(potential_offline_workers)
-                if not validator.return_sig_verified_transactions():
+                if not transaction_arrival_queue:
                     print("Workers offline or disconnected while transmitting updates, or no transaction has been verified or been received due to time-out by this validator.")
                     continue
-                # broadcast to other validators, preserving arrival order
+            
+                # associate with a miner to send validated transactions
+                associated_miner = validator.associate_with_device("miner")
+                if not associated_miner:
+                    print(f"Cannot find a qualified miner in validator {validator.return_idx()} peer list.")
+                    continue
+                associated_miner.add_device_to_association(validator)
+
+                # broadcast to other validators
                 # may go offline at any point
-                if validator.online_switcher() and validator.return_sig_verified_transactions():
-                    validator.broadcast_sig_verified_transaction()
-                    # associate with a miner to send validated transactions
-                    associated_miner = validator.associate_with_device("miner")
-                    if not associated_miner:
-                        print(f"Cannot find a qualified miner in validator {validator.return_idx()} peer list.")
-                        continue
-                    associated_miner.add_device_to_association(validator)
+                if validator.online_switcher() and transaction_arrival_queue:
+                    validator.broadcast_validator_transactions()
                 if validator.is_online():
                     validator.online_switcher()
             else:
                 print(f"{validator.return_idx()} - validator {worker_iter+1}/{len(workers_this_round)} is offline")
 
-        ''' Step 3 - validators do self and cross-validation(evaluate local updates from workers)'''
+        ''' Step 2.5 - with the broadcasted transactions, validators decide the final transaction arrival order '''
+        for validator_iter in range(len(validators_this_round)):
+            validator = validators_this_round[validator_iter]
+            if validator.is_online():
+                print(f"{validator.return_idx()} - validator calculating the final transactions arrival order by combining the direct worker transactions received and received broadcasted transactions...")
+                accepted_broadcasted_validator_transactions = validator.return_accepted_broadcasted_validator_transactions()
+                self_validator_link_speed = validator.return_link_speed()
+                # calculate broadcasted transactions arrival time
+                accepted_broadcasted_transactions_arrival_queue = {}
+                if accepted_broadcasted_validator_transactions:
+                    for broadcasting_validator_record in accepted_broadcasted_validator_transactions:
+                        broadcasting_validator_link_speed = broadcasting_validator_record['source_device_link_speed']
+                        lower_link_speed = self_validator_link_speed if self_validator_link_speed < broadcasting_validator_link_speed else broadcasting_validator_link_speed
+
+                        for arrival_time_at_broadcasting_validator, broadcasted_transaction in broadcasting_validator_record['broadcasted_transactions'].items():
+                            transmission_delay = (getsizeof(str(broadcasted_transaction))/70000)/lower_link_speed
+                            accepted_broadcasted_transactions_arrival_queue[transmission_delay + arrival_time_at_broadcasting_validator] = broadcasted_transaction
+                # mix the boardcasted transactions with the direct accepted transactions
+                if validator.return_unordered_arrival_time_direct_worker_transactions() and accepted_broadcasted_transactions_arrival_queue:
+                    final_transactions_arrival_queue = sorted({**validator.return_unordered_arrival_time_direct_worker_transactions(), **accepted_broadcasted_transactions_arrival_queue}.items())
+                    validator.set_transaction_for_final_processing_queue(final_transactions_arrival_queue)
+                elif validator.return_unordered_arrival_time_direct_worker_transactions():
+                    validator.set_transaction_for_final_processing_queue(sorted(validator.return_unordered_arrival_time_direct_worker_transactions()))
+                elif accepted_broadcasted_transactions_arrival_queue:
+                    (sorted(accepted_broadcasted_transactions_arrival_queue))
+                else:
+                    print(f"{validator.return_idx()} - validator does not have any transaction recorded in this round.")
+            else:
+                print(f"{validator.return_idx()} - validator {worker_iter+1}/{len(workers_this_round)} is offline")
+
+
+        ''' Step 3 - validators do self and cross-validation(evaluate local updates from workers) by the order of transaction arrival time. Validator only record the signature verified transactions'''
         print()
         for validator_iter in range(len(validators_this_round)):
             validator = validators_this_round[validator_iter]
@@ -531,85 +522,20 @@ if __name__=="__main__":
                     if validator.pow_resync_chain(args['verbose']):
                         validator.update_model_after_chain_resync()
             if validator.is_online():
-                # self verification
-                unconfirmmed_transactions = validator.return_unconfirmmed_transactions()
-                if unconfirmmed_transactions:
-                    print(f"\n{validator.return_idx()} - validator {validator_iter+1}/{len(validators_this_round)} doing self verification...")
+                final_transactions_arrival_queue = validator.return_unordered_arrival_time_direct_worker_transactions()
+                if final_transactions_arrival_queue:
+                    for arrival_time, unconfirmmed_transaction in final_transactions_arrival_queue.items():
+                        validation_time, sig_verified_unconfirmmed_transaction = validator.validate_worker_transaction(unconfirmmed_transaction, rewards)
+                        if validation_time:
+                            # beginning_time_for_miner: validation_transaction
+                            validator.add_sig_verified_transaction_to_queue({arrival_time + validation_time: sig_verified_unconfirmmed_transaction})
+                            print(f"A validation process has been done for the transaction from worker {sig_verified_unconfirmmed_transaction['worker_device_idx']} by validator {validator.return_idx()}")
                 else:
-                    print(f"\nNo recorded transactions by {validator.return_idx()} - validator {validator_iter+1}/{len(validators_this_round)} will not do self verification.")
-                # determine unconfirmmed_transaction validating order by taking transmission delay into account
-                transaction_total_delay_records = {}
-                validator_link_speed = validator.return_link_speed()
-                for unconfirmmed_transaction in unconfirmmed_transactions:
-                    source_worker_idx = unconfirmmed_transaction['worker_device_idx']
-                    if not source_worker_idx in validator.return_black_list():
-                        upload_worker_link_speed = devices_list[source_worker_idx],return_link_speed()
-                        transmission_delay = getsizeof(str(unconfirmmed_transaction))/validator_link_speed if validator_link_speed < upload_worker_link_speed else getsizeof(str(unconfirmmed_transaction))/upload_worker_link_speed
-                        total_delay = unconfirmmed_transaction['last_local_iteration(s)_spent_time'] + transmission_delay
-                        transaction_total_delay_records[total_delay] = unconfirmmed_transaction
-                    else:
-                        print(f"worker {source_worker_idx} in validator's black list. transaction not validated.")
-                unconfirmmed_transaction_processing_queue = []
-                for total_delay in sorted(transaction_total_delay_records):
-                    unconfirmmed_transaction_processing_queue.append(transaction_total_delay_records[total_delay])
-                for unconfirmmed_transaction in unconfirmmed_transaction_processing_queue:
-                    # verify signature
-                    if validator.verify_worker_transaction_by_signature(unconfirmmed_transaction):
-                        # validate local updates
-                        # TODO DOING NOW
-                        if_malicious = validator.validate_worker_local_update(unconfirmmed_transaction)
-                        unconfirmmed_transaction['tx_verified_by'] = validator.return_idx()
-                        # TODO any idea?
-                        unconfirmmed_transaction['mining_rewards'] = rewards
-                        candidate_block.add_verified_transaction(unconfirmmed_transaction)
-                    # validator.receive_rewards(rewards)
-                # cross verification
-                accepted_broadcasted_transactions = validator.return_accepted_broadcasted_transactions()
-                if accepted_broadcasted_transactions:
-                    print(f"{validator.return_idx()} - validator {validator_iter+1}/{len(validators_this_round)} doing cross verification...")
-                else:
-                    print(f"No broadcasted transactions have been recorded by {validator.return_idx()} - validator {validator_iter+1}/{len(validators_this_round)} will not do cross verification.")
-                for unconfirmmed_transactions in accepted_broadcasted_transactions:
-                    for unconfirmmed_transaction in unconfirmmed_transactions:
-                        if validator.verify_worker_transaction_by_signature(unconfirmmed_transaction):
-                            unconfirmmed_transaction['tx_verified_by'] = validator.return_idx()
-                            # TODO any idea?
-                            unconfirmmed_transaction['mining_rewards'] = rewards
-                            candidate_block.add_verified_transaction(unconfirmmed_transaction)
-                            validator.receive_rewards(rewards) 
-                # mine the block
-                if candidate_block.return_transactions():
-                    print(f"{validator.return_idx()} - validator {validator_iter+1}/{len(validators_this_round)} mining the worker block...")
-                    # return the last block and add previous hash
-                    last_block = validator.return_blockchain_object().return_last_block()
-                    if last_block is None:
-                        # mine the genesis block
-                        candidate_block.set_previous_block_hash(None)
-                    else:
-                        candidate_block.set_previous_block_hash(last_block.compute_hash(hash_entire_block=True))
-                    # mine the candidate block by PoW, inside which the block_hash is also set
-                    mined_block = validator.proof_of_work(candidate_block)
-                else:
-                    print("No transaction to mine for this block.")
+                    print(f"{validator.return_idx()} - validator {worker_iter+1}/{len(workers_this_round)} did not receive any transactions from worker or validator in this round.")
                     continue
-                # unfortunately may go offline
-                if validator.online_switcher():
-                    # record mining time
-                    try:
-                        block_generation_time_spent[validator] = (time.time() - start_time)/(validator.return_computation_power())
-                        print(f"{validator.return_idx()} - validator mines a worker block in {block_generation_time_spent[validator]} seconds.")
-                    except:
-                        block_generation_time_spent[validator] = float('inf')
-                        print(f"{validator.return_idx()} - validator mines a worker block in INFINITE time...")
-                    mined_block.set_mining_rewards(rewards)
-                    # sign the block
-                    validator.sign_block(mined_block)
-                    validator.set_mined_block(mined_block)
-            else:
-                print(f"{validator.return_idx()} - validator {validator_iter+1}/{len(validators_this_round)} is offline.")
+                # validator.return_sig_verified_transactions_queue()
 
-        # TODO do not forget to add validator rewards!!
-        # miners accept local updates and broadcast to other miners
+        ''' Step 4 - validators send signature verified transactions to associated miner'''
         print()
         for miner_iter in range(len(miners_this_round)):
             miner = miners_this_round[miner_iter]
@@ -624,31 +550,33 @@ if __name__=="__main__":
                 if miner.pow_resync_chain(args['verbose']):
                     miner.update_model_after_chain_resync()
                 # miner accepts local updates from its workers association
-                print(f"{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} accepting workers' updates...")
-                potential_offline_workers = set()
-                associated_workers = miner.return_associated_workers()
-                if not associated_workers:
-                    print(f"No workers are associated with miner {miner.return_idx()} for this communication round.")
+                print(f"{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} accepting validators' sig verified transactions...")
+                potential_offline_validators = set()
+                associated_validators = miner.return_associated_validators()
+                if not associated_validators:
+                    print(f"No validators are associated with miner {miner.return_idx()} for this communication round.")
                     continue
-                for worker in associated_workers:
-                    if worker.is_online():
-                        miner.add_unconfirmmed_transaction(worker.return_local_updates_and_signature(comm_round), worker.return_idx())
+                for validator in associated_validators:
+                    if validator.is_online():
+                        validator.return_sig_verified_transactions_queue()
+                        
+                        # miner.add_unconfirmmed_transaction(validator.return_local_updates_and_signature(comm_round), validator.return_idx())
                     else:
-                        potential_offline_workers.add(worker)
+                        potential_offline_validators.add(validator)
                         if args["verbose"]:
-                            print(f"worker {worker.return_idx()} is offline when accepting transaction. Removed from peer list.")
-                miner.remove_peers(potential_offline_workers)
-                if not miner.return_unconfirmmed_transactions():
-                    print("Workers offline or disconnected while transmitting updates.")
-                    continue
-                # broadcast to other miners
-                # may go offline at any point
-                if miner.online_switcher() and miner.return_unconfirmmed_transactions():
-                    miner.broadcast_transactions()
-                if miner.is_online():
-                    miner.online_switcher()
-            else:
-                print(f"{miner.return_idx()} - miner {worker_iter+1}/{len(workers_this_round)} is offline")
+                            print(f"validator {validator.return_idx()} is offline when accepting sig verified transaction. Removed from peer list.")
+                miner.remove_peers(potential_offline_validators)
+            #     if not miner.return_unconfirmmed_transactions():
+            #         print("Workers offline or disconnected while transmitting updates.")
+            #         continue
+            #     # broadcast to other miners
+            #     # may go offline at any point
+            #     if miner.online_switcher() and miner.return_unconfirmmed_transactions():
+            #         miner.broadcast_transactions()
+            #     if miner.is_online():
+            #         miner.online_switcher()
+            # else:
+            #     print(f"{miner.return_idx()} - miner {worker_iter+1}/{len(workers_this_round)} is offline")
 
         # if not check_network_eligibility():
             # print("Go to the next round.\n")
@@ -884,7 +812,7 @@ if __name__=="__main__":
                 print(f'Worker {worker.return_idx()} is doing global update...')
                 if worker.return_received_block_from_miner():
                     worker.global_update()
-                    accuracy = worker.evaluate_updated_weights()
+                    accuracy = worker.evaluate_model_weights()
                     accuracy = float(accuracy)
                     worker.set_accuracy_this_round(accuracy)
                     report_msg = f'Worker {worker.return_idx()} at the communication round {comm_round+1} with chain length {worker.return_blockchain_object().return_chain_length()} has accuracy: {accuracy}\n'

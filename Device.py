@@ -64,7 +64,7 @@ class Device:
         self.has_added_block = False
         self.is_malicious = is_malicious
         ''' For workers '''
-        self.local_updates_rewards = 0
+        self.local_updates_rewards_per_transaction = 0
         self.received_block_from_miner = None
         self.accuracy_this_round = float('-inf')
         self.worker_associated_validator = None
@@ -90,11 +90,15 @@ class Device:
         self.validator_associated_miner = None
         self.validator_acception_wait_time = validator_acception_wait_time
         # self.validator_sig_validated_transactions_size_limit = validator_sig_validated_transactions_size_limit
-        self.sig_verified_transactions = None or []
-        self.broadcasted_sig_verified_transactions = None or []
+        #self.sig_verified_transactions = None or []
+        #self.broadcasted_sig_verified_transactions = None or []
+        self.unordered_arrival_time_direct_worker_transactions = None
+        self.accepted_broadcasted_validator_transactions = None or []
+        self.final_transactions_queue_to_validate = None
+        self.sig_verified_transactions_queue = None or []
         # self.validator_size_stop = validator_size_stop
         # self.unconfirmmed_validator_transactions = None or []
-        # self.broadcasted_validator_transactions = None or []
+        # self.accepted_broadcasted_validator_transactions = None or []
         
 
     ''' Common Methods '''
@@ -446,6 +450,11 @@ class Device:
                 self.operate_on_validator_block(passed_in_validator_block=block)
 
     ''' Worker '''
+    def add_noise_to_weights(self, m):
+        with torch.no_grad():
+            if hasattr(m, 'weight'):
+                m.weight.add_(torch.randn(m.weight.size()) * 0.1)
+                
     # TODO change to computation power
     def worker_local_update(self, rewards, local_epochs=1):
         print(f"Worker {self.idx} is doing local_update with computation power {self.computation_power} and link speed {round(self.link_speed,3)}")
@@ -456,6 +465,7 @@ class Device:
         self.local_update_time = time.time()
         # local worker update by specified epochs
         # usually, if validator acception time is specified, local_epochs should be 1
+        self.local_updates_rewards_per_transaction = 0
         for epoch in range(local_epochs):
             for data, label in self.train_dl:
                 data, label = data.to(self.dev), label.to(self.dev)
@@ -464,7 +474,7 @@ class Device:
                 loss.backward()
                 self.opti.step()
                 self.opti.zero_grad()
-                self.local_updates_rewards += rewards * (label.shape[0])
+                self.local_updates_rewards_per_transaction += rewards * (label.shape[0])
                 # self.receive_rewards(rewards)
                 # should calculate rewards only in the block. do it when block is appended
             self.local_total_epoch += 1
@@ -473,7 +483,7 @@ class Device:
             self.local_update_time = (time.time() - self.local_update_time)/self.computation_power
         except:
             self.local_update_time = float('inf')
-        
+        # self.net.apply(self.add_noise_to_weights)
         print(f"Done {local_epochs} epoch(s) and total {self.local_total_epoch} epochs")
         self.local_train_parameters = self.net.state_dict()
         return self.local_update_time
@@ -493,14 +503,14 @@ class Device:
     def return_local_updates_and_signature(self, comm_round):
         # local_total_accumulated_epochs_this_round also stands for the lastest_epoch_seq for this transaction(local params are calculated after this amount of local epochs in this round)
         # last_local_iteration(s)_spent_time may be recorded to determine calculating time? But what if nodes do not wish to disclose its computation power
-        local_updates_dict = {'worker_device_idx': self.idx, 'in_round_number': comm_round, "local_updates_params": copy.deepcopy(self.local_train_parameters), "local_updates_accumulated_rewards_this_round": self.local_updates_rewards, "last_local_iteration(s)_spent_time": self.local_update_time, "local_total_accumulated_epochs_this_round": self.local_total_epoch, "rsa_pub_key": self.return_rsa_pub_key()}
-        local_updates_dict["signature"] = self.sign_msg(sorted(local_updates_dict.items()))
+        local_updates_dict = {'worker_device_idx': self.idx, 'in_round_number': comm_round, "local_updates_params": copy.deepcopy(self.local_train_parameters), "local_updates_rewards": self.local_updates_rewards_per_transaction, "local_iteration(s)_spent_time": self.local_update_time, "local_total_accumulated_epochs_this_round": self.local_total_epoch, "worker_rsa_pub_key": self.return_rsa_pub_key()}
+        local_updates_dict["worker_signature"] = self.sign_msg(sorted(local_updates_dict.items()))
         return local_updates_dict
 
     def worker_reset_vars_for_new_round(self):
         self.received_block_from_miner = None
         self.accuracy_this_round = float('-inf')
-        self.local_updates_rewards = 0
+        self.local_updates_rewards_per_transaction = 0
         self.has_added_block = False
         self.worker_associated_validator = None
         self.worker_associated_miner = None
@@ -532,9 +542,12 @@ class Device:
     def return_received_block_from_miner(self):
         return self.received_block_from_miner
     
-    def evaluate_updated_weights(self):
+    def evaluate_model_weights(self, weights_to_eval=None):
         with torch.no_grad():
-            self.net.load_state_dict(self.global_parameters, strict=True)
+            if weights_to_eval:
+                self.net.load_state_dict(weights_to_eval, strict=True)
+            else:
+                self.net.load_state_dict(self.global_parameters, strict=True)
             sum_accu = 0
             num = 0
             for data, label in self.test_dl:
@@ -699,7 +712,7 @@ class Device:
         self.unconfirmmed_transactions.clear()
         self.broadcasted_transactions.clear()
         # self.unconfirmmed_validator_transactions.clear()
-        # self.broadcasted_validator_transactions.clear()
+        # self.accepted_broadcasted_validator_transactions.clear()
         self.mined_block = None
         self.received_propagated_block = None
         self.received_propagated_validator_block = None
@@ -717,8 +730,18 @@ class Device:
         self.has_added_block = False
         self.validator_associated_miner = None
         self.validator_associated_worker_set.clear()
-        self.sig_verified_transactions.clear()
-        self.broadcasted_sig_verified_transactions.clear()
+        #self.sig_verified_transactions.clear()
+        #self.broadcasted_sig_verified_transactions.clear()
+        self.unordered_arrival_time_direct_worker_transactions = None
+        self.final_transactions_queue_to_validate = None
+        self.accepted_broadcasted_validator_transactions.clear()
+        self.sig_verified_transactions_queue.clear()
+
+    def add_sig_verified_transaction_to_queue(self, transaction_to_add):
+        self.sig_verified_transactions_queue.append(transaction_to_add)
+    
+    def return_sig_verified_transactions_queue(self):
+        return self.sig_verified_transactions_queue
 
     def return_online_workers(self):
         online_workers_in_peer_list = set()
@@ -895,58 +918,118 @@ class Device:
         return to_associate_device
 
     ''' validator '''
-    def add_sig_verified_transaction(self, transaction_to_validate, souce_device_idx):
-        if not souce_device_idx in self.black_list:
-            self.sig_verified_transactions.append(copy.deepcopy(transaction_to_validate))
-            print(f"worker {souce_device_idx}'s transaction has been recorded by {self.role} {self.idx}")
-        else:
-            print(f"Source worker {souce_device_idx} is in the black list of {self.role} {self.idx}. Transaction will not be accepted.")
+    # def add_sig_verified_transaction(self, transaction_to_validate, souce_device_idx):
+    #     if not souce_device_idx in self.black_list:
+    #         self.sig_verified_transactions.append(copy.deepcopy(transaction_to_validate))
+    #         print(f"worker {souce_device_idx}'s transaction has been recorded by {self.role} {self.idx}")
+    #     else:
+    #         print(f"Source worker {souce_device_idx} is in the black list of {self.role} {self.idx}. Transaction will not be accepted.")
 
-    def remove_sig_verified_transaction(self, transaction_to_remove):
-        self.sig_verified_transactions.remove(transaction_to_remove)
+    # def remove_sig_verified_transaction(self, transaction_to_remove):
+    #     self.sig_verified_transactions.remove(transaction_to_remove)
 
-    def return_sig_verified_transactions(self):
-        return self.sig_verified_transactions
+    # def return_sig_verified_transactions(self):
+    #     return self.sig_verified_transactions
 
-    def broadcast_sig_verified_transaction(self):
+    def set_unordered_arrival_time_direct_worker_transactions(self, unordered_transaction_arrival_queue):
+        self.unordered_arrival_time_direct_worker_transactions = unordered_transaction_arrival_queue
+
+    def return_unordered_arrival_time_direct_worker_transactions(self):
+        return self.unordered_arrival_time_direct_worker_transactions
+
+    def broadcast_validator_transactions(self):
         for peer in self.peer_list:
             if peer.is_online():
                 if peer.return_role() == "validator":
                     if not peer.return_idx() in self.black_list:
-                        print(f"{self.role} {self.idx} is boardcasting signature verified transactions to {peer.return_role()} {peer.return_idx()}.")
-                        # in the real distributed system, it should be broadcasting transaction one by one. Here we send the entire received sig verified transactions
-                        peer.accept_broadcasted_sig_verified_transactions(self, self.sig_verified_transactions)
+                        print(f"{self.role} {self.idx} is boardcasting received transactions to {peer.return_role()} {peer.return_idx()}.")
+                        # in the real distributed system, it should be broadcasting transaction one by one. Here we send the entire received transactions and later calculate the order the individual transaction's arrival time
+                        peer.accept_broadcasted_validator_transactions(self, self.unordered_arrival_time_direct_worker_transactions)
                     else:
-                        print(f"Destination validator {peer.return_idx()} is in {self.role} {self.idx}'s black_list. Boardcasting skipped.")
+                        print(f"Destination validator {peer.return_idx()} is in {self.role} {self.idx}'s black_list. Boardcasting skipped for this dest validator.")
 
-    def accept_broadcasted_sig_verified_transactions(self, source_device, broadcasted_transactions):
+    def accept_broadcasted_validator_transactions(self, source_device, unordered_transaction_arrival_queue_from_source_validator):
         # discard malicious node
         if not source_device.return_idx() in self.black_list:
-            self.broadcasted_sig_verified_transactions.append(copy.deepcopy(broadcasted_transactions))
-            print(f"{self.role} {self.idx} has accepted sig verified transactions from {source_device.return_role()} {source_device.return_idx()}")
+            self.accepted_broadcasted_validator_transactions.append({'source_device_link_speed': source_device.return_link_speed(),'broadcasted_transactions': copy.deepcopy(unordered_transaction_arrival_queue_from_source_validator)})
+            print(f"{self.role} {self.idx} has accepted validator transactions from {source_device.return_role()} {source_device.return_idx()}")
         else:
-            print(f"Source {source_device.return_role()} {source_device.return_idx()} is in {self.role} {self.idx}'s black list. Transaction not accepted.")
+            print(f"Source validator {source_device.return_role()} {source_device.return_idx()} is in {self.role} {self.idx}'s black list. Broadcasted transactions not accepted.")
 
-    def verify_worker_transaction_by_signature(self, transaction_to_verify):
-        worker_transaction_device_idx = transaction_to_verify['worker_device_idx']
-        if worker_transaction_device_idx in self.black_list:
-            print(f"{worker_transaction_device_idx} is in validator's blacklist. Trasaction won't get verified.")
-            return False
-        transaction_before_signed = copy.deepcopy(transaction_to_verify)
-        del transaction_before_signed["signature"]
-        modulus = transaction_to_verify['rsa_pub_key']["modulus"]
-        pub_key = transaction_to_verify['rsa_pub_key']["pub_key"]
-        signature = transaction_to_verify["signature"]
-        # verify
-        hash = int.from_bytes(sha256(str(sorted(transaction_before_signed.items())).encode('utf-8')).digest(), byteorder='big')
-        hashFromSignature = pow(signature, pub_key, modulus)
-        if hash == hashFromSignature:
-            print(f"Signature of transaction from worker {worker_transaction_device_idx} is verified by validator {self.idx}!")
-            return True
+    def return_accepted_broadcasted_validator_transactions(self):
+        return self.accepted_broadcasted_validator_transactions
+
+    def set_transaction_for_final_processing_queue(self, final_transactions_arrival_queue):
+        self.final_transactions_queue_to_validate = final_transactions_arrival_queue
+
+    def return_final_transactions_processing_queue(self):
+        return self.final_transactions_queue_to_validate
+    # def broadcast_sig_verified_transaction(self):
+    #     for peer in self.peer_list:
+    #         if peer.is_online():
+    #             if peer.return_role() == "validator":
+    #                 if not peer.return_idx() in self.black_list:
+    #                     print(f"{self.role} {self.idx} is boardcasting signature verified transactions to {peer.return_role()} {peer.return_idx()}.")
+    #                     # in the real distributed system, it should be broadcasting transaction one by one. Here we send the entire received sig verified transactions
+    #                     peer.accept_broadcasted_sig_verified_transactions(self, self.sig_verified_transactions)
+    #                 else:
+    #                     print(f"Destination validator {peer.return_idx()} is in {self.role} {self.idx}'s black_list. Boardcasting skipped.")
+
+    # def accept_broadcasted_sig_verified_transactions(self, source_device, broadcasted_transactions):
+    #     # discard malicious node
+    #     if not source_device.return_idx() in self.black_list:
+    #         self.broadcasted_sig_verified_transactions.append(copy.deepcopy(broadcasted_transactions))
+    #         print(f"{self.role} {self.idx} has accepted sig verified transactions from {source_device.return_role()} {source_device.return_idx()}")
+    #     else:
+    #         print(f"Source {source_device.return_role()} {source_device.return_idx()} is in {self.role} {self.idx}'s black list. Transaction not accepted.")
+
+    def validate_worker_transaction(self, transaction_to_verify, rewards):
+        if self.computation_power == 0:
+            print(f"validator {self.idx} has computation power 0 and will not be able to validate this transaction in time")
+            return False, False
         else:
-            print(f"Signature invalid. Transaction from worker {worker_transaction_device_idx} is NOT verified.")
-            return False
-
+            worker_transaction_device_idx = transaction_to_verify['worker_device_idx']
+            if worker_transaction_device_idx in self.black_list:
+                print(f"{worker_transaction_device_idx} is in validator's blacklist. Trasaction won't get validated.")
+                return False, False
+            transaction_before_signed = copy.deepcopy(transaction_to_verify)
+            del transaction_before_signed["worker_signature"]
+            modulus = transaction_to_verify['worker_rsa_pub_key']["modulus"]
+            pub_key = transaction_to_verify['worker_rsa_pub_key']["pub_key"]
+            signature = transaction_to_verify["worker_signature"]
+            # begin validation
+            verification_time = time.time()
+            # 1 - verify signature
+            hash = int.from_bytes(sha256(str(sorted(transaction_before_signed.items())).encode('utf-8')).digest(), byteorder='big')
+            hashFromSignature = pow(signature, pub_key, modulus)
+            if hash == hashFromSignature:
+                print(f"Signature of transaction from worker {worker_transaction_device_idx} is verified by validator {self.idx}!")
+                # return True
+            else:
+                print(f"Signature invalid. Transaction from worker {worker_transaction_device_idx} does NOT pass verification.")
+                return False, False
+            # 2 - validate worker's local_updates_params
+            # current global model accuracy
+            current_accuracy = self.evaluate_model_weights()
+            # accuracy evaluated by worker's update
+            accuracy_by_worker_update_using_own_data = self.evaluate_model_weights(transaction_to_verify["local_updates_params"])
+            transaction_to_verify['validation_by'] = self.idx
+            transaction_to_verify['validation_rewards'] = rewards
+            # if accuracy decreases by worker's updates, False, otherwise True
+            print(f'Current validator model accuracy - {current_accuracy}')
+            print(f"After applying worker's update, model accuracy becomes - {accuracy_by_worker_update_using_own_data}")
+            if current_accuracy > accuracy_by_worker_update_using_own_data:
+                transaction_to_verify['update_direction'] = False
+                print(f"NOTE: worker {worker_transaction_device_idx}'s' updates is deemed as suspiciously malicious by validator {self.idx}")
+            else:
+                transaction_to_verify['update_direction'] = True
+                print(f"worker {worker_transaction_device_idx}'s' updates is deemed as GOOD by validator {self.idx}")
+            verification_time = (time.time() - verification_time)/self.computation_power
+            transaction_to_verify['verification_time'] = verification_time
+            transaction_to_verify['validator_rsa_pub_key'] = self.return_rsa_pub_key()
+            # assume signing done in negligible time
+            transaction_to_verify["validator_signature"] = self.sign_msg(sorted(transaction_to_verify.items()))
+            return verification_time, transaction_to_verify
     # def return_validator_size_stop(self):
     #     return self.validator_size_stop
 
