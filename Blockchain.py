@@ -3,9 +3,6 @@ import copy
 
 class Blockchain:
 
-    # for PoW
-    pow_difficulty = 0
-
     def __init__(self):
         self.chain = []
 

@@ -4,17 +4,17 @@ import json
 from hashlib import sha256
 
 class Block:
-    def __init__(self, idx, previous_block_hash=None, transactions=None, nonce=0, miner_pub_key=None, mined_by=None, mining_rewards=None, is_validator_block=False, pow_proof=None, signature=None):
+    def __init__(self, idx, previous_block_hash=None, transactions=None, nonce=0, miner_rsa_pub_key=None, mined_by=None, mining_rewards=None, pow_proof=None, signature=None):
         self._idx = idx
         self._previous_block_hash = previous_block_hash
-        self._transactions = transactions or []
+        self._transactions = transactions
         self._nonce = nonce
         # miner specific
-        self._miner_pub_key = miner_pub_key
+        self._miner_rsa_pub_key = miner_rsa_pub_key
         self._mined_by = mined_by
         self._mining_rewards = mining_rewards
         # validator specific
-        self._is_validator_block = is_validator_block
+        # self._is_validator_block = is_validator_block
         # the hash of the current block, calculated by compute_hash
         self._pow_proof = pow_proof
         self._signature = signature
@@ -53,8 +53,8 @@ class Block:
     def return_pow_proof(self):
         return self._pow_proof
     
-    def return_miner_pub_key(self):
-        return self._miner_pub_key
+    def return_miner_rsa_pub_key(self):
+        return self._miner_rsa_pub_key
 
     ''' Miner Specific '''
     def set_previous_block_hash(self, hash_to_set):
@@ -90,12 +90,12 @@ class Block:
     def return_transactions(self):
         return self._transactions
 
-    ''' Validator Specific '''
-    def is_validator_block(self):
-        return self._is_validator_block
+    # ''' Validator Specific '''
+    # def is_validator_block(self):
+    #     return self._is_validator_block
 
-    def add_validator_transaction(self, validator_transaction):
-        self._transactions.append(validator_transaction)
+    # def add_validator_transaction(self, validator_transaction):
+    #     self._transactions.append(validator_transaction)
 
 
     
