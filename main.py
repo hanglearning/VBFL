@@ -1,13 +1,18 @@
 # fedavg from https://github.com/WHDY/FedAvg/
 # TODO DELETE ALL receive_rewards() and only do it after a block is appended! AND whenever resync chain recalculate rewards!!!
 # TODO redistribute offline() based on very transaction, not at the beginning of every loop
-# TODO when accepting transactions, check comm_round must be in the same
-# TODO subnets
-# assume by default they only accept the transactions that are in the same round, so the final block contains only updates from the same round
+# TODO when accepting transactions, check comm_round must be in the same, that is to assume by default they only accept the transactions that are in the same round, so the final block contains only updates from the same round
+# TODO subnets - potentially resolved by let each miner sends block 
+# TODO let's not remove peers because of offline as peers may go back online later, instead just check if they are online or offline. Only remove peers if they are malicious. In real distributed network, remove peers if cannot reach for a long period of time
+
+# PoS also uses PoW resync chain - the longest chain
+
+# future work
+# TODO - non-even dataset distribution
+
 import os
 import sys
 import argparse
-#from tqdm import tqdm
 import numpy as np
 import random
 import time
@@ -22,177 +27,101 @@ from Device import Device, DevicesInNetwork
 from Block import Block
 from Blockchain import Blockchain
 
-parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter, description="Block_FedAvg")
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter, description="Block_FedAvg_Simulation")
+
+# program attributes
 parser.add_argument('-g', '--gpu', type=str, default='0', help='gpu id to use(e.g. 0,1,2,3)')
-parser.add_argument('-nd', '--num_devices', type=int, default=100, help='numer of the devices in the simulation network')
+parser.add_argument('-v', '--verbose', type=int, default=0, help='print verbose debug log')
+
+# FL attributes
 parser.add_argument('-B', '--batchsize', type=int, default=10, help='local train batch size')
 parser.add_argument('-mn', '--model_name', type=str, default='mnist_2nn', help='the model to train')
 parser.add_argument('-lr', "--learning_rate", type=float, default=0.01, help="learning rate, use value from origin paper as default")
-#parser.add_argument('-vf', "--val_freq", type=int, default=5, help="model validation frequency(of communications)")
-#parser.add_argument('-sf', '--save_freq', type=int, default=20, help='global model save frequency(of communication)')
-parser.add_argument('-max_ncomm', '--max_num_comm', type=int, default=1000, help='maximum number of communication rounds, may terminate early if converges')
-# parser.add_argument('-sp', '--save_path', type=str, default='./checkpoints', help='the saving path of checkpoints')
 parser.add_argument('-iid', '--IID', type=int, default=0, help='the way to allocate data to clients')
-parser.add_argument('-ns', '--network_stability', type=float, default=0.8, help='the odds a device is online')
-parser.add_argument('-gr', '--general_rewards', type=int, default=1, help='rewards for providing data, verification of one transaction, mining and so forth')
-parser.add_argument('-v', '--verbose', type=int, default=0, help='print verbose debug log')
-parser.add_argument('-aio', '--all_in_one', type=int, default=0, help='let all nodes be aware of each other in the network while registering')
-parser.add_argument('-ko', '--knock_out_rounds', type=int, default=5, help='a device is kicked out of the network if its accuracy shows decreasing for the number of rounds recorded by a winning validator')
-parser.add_argument('-ha', '--hard_assign', type=str, default='*,*,*', help='hard assign number of roles in the network, order by worker, miner and validator')
-# parser.add_argument('-la', '--least_assign', type=str, default='*,*,*', help='the assigned number of roles are at least guaranteed in the network')
+parser.add_argument('-max_ncomm', '--max_num_comm', type=int, default=1000, help='maximum number of communication rounds, may terminate early if converges')
+parser.add_argument('-nd', '--num_devices', type=int, default=100, help='numer of the devices in the simulation network')
 parser.add_argument('-st', '--shard_test_data', type=int, default=0, help='it is easy to see the global models are consistent across devices when the test dataset is NOT sharded')
 parser.add_argument('-nm', '--num_malicious', type=int, default=0, help="number of malicious nodes in the network. malicious node's data sets will be introduced Gaussian noise")
-# parser.add_argument('-vh', '--validator_threshold', type=float, default=0.1, help="a threshold value of accuracy difference to determine malicious worker")
-# use time window and size limit together to determine how many epochs a worker can perform and how many can a validator accept
-# parser.add_argument('-vt', '--validator_acception_wait_time', type=float, default=0.0, help="default time window for valitors to accept transactions, in seconds. No further transactions will be accepted passing this window. Either this or -le must be specified.")
-# parser.add_argument('-vs', '--validator_sig_validated_transactions_size_limit', type=float, default=0.0, help="default total size of the transactions a validator can accept. this partly determines the final block size. Requires -vt to be specified! 0 means no size limit.")
-# parser.add_argument('-vss', '--validator_size_stop', type=float, default=35000.0, help="when validator_sig_validated_transactions_size_limit is specified, this value is used to determine that when the remaining buffer of the validator is less than this value, validator stops accepting transactions")
 parser.add_argument('-le', '--default_local_epochs', type=int, default=3, help='local train epoch. Train local model by this same num of epochs for each worker, if -mt is not specified')
+
+# blockchain system consensus attributes
+parser.add_argument('-gr', '--general_rewards', type=int, default=1, help='rewards for providing data, verification of one transaction, mining and so forth')
+parser.add_argument('-ko', '--knock_out_rounds', type=int, default=5, help='a device is kicked out of the network if its accuracy shows decreasing for the number of rounds recorded by a winning validator')
+parser.add_argument('-pow', '--pow_difficulty', type=int, default=0, help="if set to 0, meaning miners are using PoS")
+
+# blockchain FL restriction attributes
 parser.add_argument('-mt', '--miner_acception_wait_time', type=float, default=0.0, help="default time window for miners to accept transactions, in seconds. 0 means no time limit, and each device will just perform same amount(-le) of epochs per round like in FedAvg paper")
 parser.add_argument('-ml', '--miner_accepted_transactions_size_limit', type=float, default=0.0, help="no further transactions will be accepted by miner after this limit. 0 means no size limit. either this or -mt has to be specified, or both. This param determines the final block_size")
+
+# debug attributes
+parser.add_argument('-ha', '--hard_assign', type=str, default='*,*,*', help='hard assign number of roles in the network, order by worker, miner and validator')
+parser.add_argument('-ns', '--network_stability', type=float, default=1.0, help='the odds a device is online')
+parser.add_argument('-aio', '--all_in_one', type=int, default=0, help='let all nodes be aware of each other in the network while registering')
 parser.add_argument('-els', '--even_link_speed_strength', type=int, default=1, help="This variable is used to simulate transmission delay. Default value 1 means every device is assigned to the same link speed strength -dts bytes/sec. If set to 0, link speed strength is randomly initiated between 0 and 1, meaning a device will transmit  -els*-dts bytes/sec - during experiment, one transaction is around 35k bytes.")
 parser.add_argument('-dts', '--base_data_transmission_speed', type=float, default=70000.0, help="volume of data can be transmitted per second when -els == 1. set this variable to determine transmission speed, which further determines the transmission delay - during experiment, one transaction is around 35k bytes.")
 parser.add_argument('-ecp', '--even_computation_power', type=int, default=1, help="This variable is used to simulate strength of hardware equipment. The calculation time will be shrunk down by this value. Default value 1 means evenly assign computation power to 1. If set to 0, power is randomly initiated as an int between 0 and 4, both included.")
-parser.add_argument('-pow', '--pow_difficulty', type=int, default=0, help="if set to 0, meaning miners are using PoS")
-
-# def flattern_2d_to_1d(arr):
-#     final_set = set()
-#     for sub_arr in arr:
-#         for ele in sub_arr:
-#             final_set.add(sub_arr)
-#     return final_set
-
-# def find_sub_nets():
-#     # sort of DFS
-#     sub_nets = []
-#     for device_seq, device in devices_in_network.devices_set.items():
-#         sub_net = set()
-#         checked_device = flattern_2d_to_1d(sub_nets)
-#         while device not in checked_device and not in sub_net:
-#             sub_net.add(device)
-#             for peer in device.return_peers():
-#                 device = peer
-#         sub_nets.append(sub_net)
 
 
-# TODO write logic here as the control should not be in device class, must be outside
-def smart_contract_worker_upload_accuracy_to_validator(worker, validator):
-    validator.accept_accuracy(worker, rewards)
-
-# TODO should be flexible depending on loose/hard assign
-# TODO since we now allow devices to go back online, may discard this function
-def check_network_eligibility(check_online=False):
-    # num_online_workers = 0
-    # num_online_miners = 0
-    # num_online_validators = 0
-    # for worker in workers_this_round:
-    #     if worker.is_online():
-    #         num_online_workers += 1
-    # for miner in miners_this_round:
-    #     if miner.is_online():
-    #         num_online_miners += 1
-    # for validator in validators_this_round:
-    #     if validator.is_online():
-    #         num_online_validators += 1
-    ineligible = False
-    if len(workers_this_round) == 0:
-        print('There is no workers online in this round, ', end='')
-        ineligible = True
-    elif len(miners_this_round) == 0:
-        print('There is no miners online in this round, ', end='')
-        ineligible = True
-    elif len(validators_this_round) == 0:
-        print('There is no validators online in this round, ', end='')
-        ineligible = True
-    if ineligible:
-        print('which is ineligible for the network to continue operating.')
-        return False
-    return True
-
-def register_in_the_network(registrant, check_online=False):
-    potential_registrars = set(devices_in_network.devices_set.values())
-    # it cannot register with itself
-    potential_registrars.discard(registrant)        
-    # pick a registrar
-    registrar = random.sample(potential_registrars, 1)[0]
-    if check_online:
-        if not registrar.is_online():
-            online_registrars = set()
-            for registrar in potential_registrars:
-                if registrar.is_online():
-                    online_registrars.add(registrar)
-            if not online_registrars:
-                return False
-            registrar = random.sample(online_registrars, 1)[0]
-    # registrant add registrar to its peer list
-    registrant.add_peers(registrar)
-    # this device sucks in registrar's peer list
-    registrant.add_peers(registrar.return_peers())
-    # registrar adds registrant(must in this order, or registrant will add itself from registrar's peer list)
-    registrar.add_peers(registrant)
-    return True
-
-def register_by_aio(device):
-    device.add_peers(set(devices_in_network.devices_set.values()))
+# parser.add_argument('-sp', '--save_path', type=str, default='./checkpoints', help='the saving path of checkpoints')
+# parser.add_argument('-la', '--least_assign', type=str, default='*,*,*', help='the assigned number of roles are at least guaranteed in the network')
+# parser.add_argument('-vh', '--validator_threshold', type=float, default=0.1, help="a threshold value of accuracy difference to determine malicious worker")
 
 if __name__=="__main__":
 
-    # program running time for logging purpose
+    ''' SETTING UP '''
+    # 1. set program running time for logging purpose
     date_time = datetime.now().strftime("%d%m%Y_%H%M%S")
 
     args = parser.parse_args()
     args = args.__dict__
 
-    # DATA_TRANSMISSION_PER_SECOND = args['base_data_transmission_speed']
-
-    # for demonstration purposes, this reward is for everything
+    # 2. for demonstration purposes, this reward is for every rewarded action
     rewards = args["general_rewards"]
 
-    # get number of roles needed in the network
+    # 3. get number of roles needed in the network
     roles_requirement = args['hard_assign'].split(',')
     
     try:
         workers_needed = int(roles_requirement[0])
     except:
-        workers_needed = 0
+        workers_needed = 1
     
     try:
         miners_needed = int(roles_requirement[1])
     except:
-        miners_needed = 0
+        miners_needed = 1
     
     try:
         validators_needed = int(roles_requirement[2])
     except:
-        validators_needed = 0
+        validators_needed = 1
 
-    if args['num_devices'] < workers_needed + miners_needed + validators_needed:
+    # 4. check arguments eligibility
+
+    num_devices = args['num_devices']
+    num_malicious = args['num_malicious']
+    
+    if num_devices < workers_needed + miners_needed + validators_needed:
         sys.exit("ERROR: Roles assigned to the devices exceed the maximum number of allowed devices in the network.")
 
-    # check eligibility
-    if args['num_devices'] < 2:
+    if num_devices < 3:
         sys.exit("ERROR: There are not enough devices in the network.\n The system needs at least one miner, one worker and/or one validator to start the operation.\nSystem aborted.")
 
-    num_malicious = args['num_malicious']
-    num_devices = args['num_devices']
+    
     if num_malicious:
         if num_malicious > num_devices:
             sys.exit("ERROR: The number of malicious nodes cannot exceed the total number of devices set in this network")
         else:
-            print(f"Malicious nodes vs total devices set to {num_devices}/{num_devices} = {(num_devices/num_devices)*100:.2f}%")
+            print(f"Malicious nodes vs total devices set to {num_malicious}/{num_devices} = {(num_malicious/num_devices)*100:.2f}%")
 
-    # # make chechpoint save path
-    # if not os.path.isdir(args['save_path']):
-    #     os.mkdir(args['save_path'])
-
-    # create neural net based on the input model name
+    # 5. create neural net based on the input model name
     net = None
     if args['model_name'] == 'mnist_2nn':
         net = Mnist_2NN()
     elif args['model_name'] == 'mnist_cnn':
         net = Mnist_CNN()
 
-    # assign GPUs if available and prepare the net
+    # 6. assign GPUs if available and prepare the net
     os.environ['CUDA_VISIBLE_DEVICES'] = args['gpu']
     dev = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     if torch.cuda.device_count() > 1:
@@ -200,59 +129,46 @@ if __name__=="__main__":
     print(f"{torch.cuda.device_count()} GPUs are available to use!")
     net = net.to(dev)
 
-    # set loss_function and optimizer
+    # 6. set loss_function and optimizer
     loss_func = F.cross_entropy
     opti = optim.SGD(net.parameters(), lr=args['learning_rate'])
-    
-    # get validator transaction acception limit
-    # validator_acception_wait_time = args['validator_acception_wait_time']
-    # validator_sig_validated_transactions_size_limit = args['validator_sig_validated_transactions_size_limit']
 
-    # if not (validator_acception_wait_time or validator_sig_validated_transactions_size_limit):
-    #     sys.exit("ERROR: either -vl or -vl has to be specified, or both.")
-    
-    # get miner transaction acception limit
-    # miner_acception_wait_time = args['miner_acception_wait_time']
-    # miner_accepted_transactions_size_limit = args['miner_accepted_transactions_size_limit']
-
-    # if not (miner_acception_wait_time or miner_accepted_transactions_size_limit):
-    #     sys.exit("ERROR: either -mt or -ml has to be specified, or both.")
-
-    # TODO - # of malicious nodes, non-even dataset distribution
-    # create devices in the network
-    devices_in_network = DevicesInNetwork(data_set_name='mnist', is_iid=args['IID'], batch_size = args['batchsize'], loss_func = loss_func, opti = opti, num_devices=args['num_devices'], network_stability=args['network_stability'], net=net, dev=dev, knock_out_rounds=args['knock_out_rounds'], shard_test_data=args['shard_test_data'], miner_acception_wait_time=args['miner_acception_wait_time'], miner_accepted_transactions_size_limit=args['miner_accepted_transactions_size_limit'], pow_difficulty=args['pow_difficulty'], even_link_speed_strength=args['even_link_speed_strength'], base_data_transmission_speed=args['base_data_transmission_speed'], even_computation_power=args['even_computation_power'], num_malicious=args['num_malicious'])
-    # test_data_loader = devices_in_network.test_data_loader
-
+    # 7. create devices in the network
+    devices_in_network = DevicesInNetwork(data_set_name='mnist', is_iid=args['IID'], batch_size = args['batchsize'], loss_func = loss_func, opti = opti, num_devices=num_devices, network_stability=args['network_stability'], net=net, dev=dev, knock_out_rounds=args['knock_out_rounds'], shard_test_data=args['shard_test_data'], miner_acception_wait_time=args['miner_acception_wait_time'], miner_accepted_transactions_size_limit=args['miner_accepted_transactions_size_limit'], pow_difficulty=args['pow_difficulty'], even_link_speed_strength=args['even_link_speed_strength'], base_data_transmission_speed=args['base_data_transmission_speed'], even_computation_power=args['even_computation_power'], num_malicious=num_malicious)
     devices_list = list(devices_in_network.devices_set.values())
 
+    # 8. register devices and initialize global parameterms
     for device in devices_list:
         # set initial global weights
         device.init_global_parameters()
+        # helper function for registration simulation - set devices_list and aio
+        device.set_devices_list_and_aio(devices_list, args["all_in_one"])
         # simulate peer registration, with respect to device idx order
-        if not args["all_in_one"]:
-            register_in_the_network(device)
-        else:
-            register_by_aio(device)
-
+        device.register_in_the_network()
     # remove its own from peer list if there is
     for device in devices_list:
         device.remove_peers(device)
 
-    # build a dict to record worker accuracies for different rounds
-    workers_accuracies_records = {}
+    # 9. build a dict to record device accuracies accross rounds
+    devices_accuracies_records = {}
     for device_seq, device in devices_in_network.devices_set.items():
-        workers_accuracies_records[device_seq] = {}
+        devices_accuracies_records[device_seq] = {}
 
-    # FL starts here
+    # 10. make chechpoint save path
+    # if not os.path.isdir(args['save_path']):
+    #     os.mkdir(args['save_path'])
+
+    # BlockFL starts here
     for comm_round in range(1, args['max_num_comm']+1):
         print(f"\nCommunication round {comm_round}")
-        workers_this_round = []
-        miners_this_round = []
-        validators_this_round = []
-        # assign role first, and then simulate if online or offline
+
+        # (RE)ASSIGN ROLES
         workers_to_assign = workers_needed
         miners_to_assign = miners_needed
         validators_to_assign = validators_needed
+        workers_this_round = []
+        miners_this_round = []
+        validators_this_round = []
         random.shuffle(devices_list)
         for device in devices_list:
             if workers_to_assign:
@@ -272,47 +188,37 @@ if __name__=="__main__":
                 miners_this_round.append(device)
             else:
                 validators_this_round.append(device)
+            # determine if online at the beginning (essential for step 1 when worker needs to associate with an online device)
             device.online_switcher()
-            #     # though back_online, resync chain when they are performing tasks
-            #     if args['verbose']:
-            #         print(f'{device.return_idx()} {device.return_role()} online - ', end='')
-            # else:
-            #     if args['verbose']:
-            #         print(f'{device.return_idx()} {device.return_role()} offline - ', end='')
-            # # debug chain length
-            # if args['verbose']:
-            #     print(f"chain length {device.return_blockchain_object().return_chain_length()}")
-            # debug
-        
-        if not check_network_eligibility():
-            print("Go to the next round and re-assign role.\n")
-            continue
-        
-        # shuffle the list(for worker, this will affect the order of dataset portions to be trained)
-        random.shuffle(workers_this_round)
-        random.shuffle(miners_this_round)
-        random.shuffle(validators_this_round)
+            # REMOVED AS OFFLINE PEERS WILL NOT BE DISCARDED ANY MORE - register with a peer in case peer list empty
 
+
+        ''' DEBUGGING CODE '''
         if args['verbose']:
+
+            # show devices initial chain length and if online
+            for device in devices_list:
+                if device.is_online():
+                    print(f'{device.return_idx()} {device.return_role()} online - ', end='')
+                else:
+                    print(f'{device.return_idx()} {device.return_role()} offline - ', end='')
+                # debug chain length
+                print(f"chain length {device.return_blockchain_object().return_chain_length()}")
+        
+            # show device roles
+            print(f"\nThere are {len(workers_this_round)} workers, {len(miners_this_round)} miners and {len(validators_this_round)} validators in this round.")
             print("\nworkers this round are")
             for worker in workers_this_round:
                 print(f"d_{worker.return_idx().split('_')[-1]} online - {worker.is_online()} with chain len {worker.return_blockchain_object().return_chain_length()}")
             print("\nminers this round are")
             for miner in miners_this_round:
                 print(f"d_{miner.return_idx().split('_')[-1]} online - {miner.is_online()} with chain len {miner.return_blockchain_object().return_chain_length()}")
-            if validators_this_round:
-                print("\nvalidators this round are")
-                for validator in validators_this_round:
-                    print(f"d_{validator.return_idx().split('_')[-1]} online - {validator.is_online()} with chain len {validator.return_blockchain_object().return_chain_length()}")
-            else:
-                print("\nThere are no validators this round.")
-        
-        if args['verbose']:
-            print(f"\nThere are {len(workers_this_round)} workers, {len(miners_this_round)} miners and {len(validators_this_round)} validators in this round.")
+            print("\nvalidators this round are")
+            for validator in validators_this_round:
+                print(f"d_{validator.return_idx().split('_')[-1]} online - {validator.is_online()} with chain len {validator.return_blockchain_object().return_chain_length()}")
             print()
 
-        # debug peers
-        if args['verbose']:
+            # show peers with round number
             print(f"+++++++++ Round {comm_round} Beginning Peer Lists +++++++++")
             for device_seq, device in devices_in_network.devices_set.items():
                 peers = device.return_peers()
@@ -322,171 +228,169 @@ if __name__=="__main__":
                 print()
             print(f"+++++++++ Round {comm_round} Beginning Peer Lists +++++++++")
 
-        # re-init round vars
+        ''' DEBUGGING CODE ENDS '''
+
+        # re-init round vars - in real distributed system, they could still fall behind in comm round, but here we assume they will all go into the next round together, thought device may go offline somewhere in the previous round and their variables were not therefore reset
         for miner in miners_this_round:
-            if miner.is_online():
-                miner.miner_reset_vars_for_new_round()
+            miner.miner_reset_vars_for_new_round()
         for worker in workers_this_round:
-            if worker.is_online():
-                worker.worker_reset_vars_for_new_round()
+            worker.worker_reset_vars_for_new_round()
         for validator in validators_this_round:
-            if validator.is_online():
-                validator.validator_reset_vars_for_new_round()
+            validator.validator_reset_vars_for_new_round()
+
+        # DOESN'T MATTER ANY MORE AFTER TRACKING TIME, but let's keep it - orginal purpose: shuffle the list(for worker, this will affect the order of dataset portions to be trained)
+        random.shuffle(workers_this_round)
+        random.shuffle(miners_this_round)
+        random.shuffle(validators_this_round)
         
-        # workers, validators and miners take turns to perform jobs
-        
-        ''' Step 1 - workers assign associated miner and validator (and do local updates, but it is implemented in code of step 2) '''
+        ''' workers, validators and miners take turns to perform jobs '''
+
+        print(''' Step 1 - workers assign associated miner and validator (and do local updates, but it is implemented in code block of step 2) ''')
         for worker_iter in range(len(workers_this_round)):
             worker = workers_this_round[worker_iter]
-            if worker.is_online():
-                # update peer list
-                if not worker.update_peer_list(args['verbose']):
-                    # peer_list_empty, randomly register with an online node
-                    if not register_in_the_network(worker, check_online=True):
-                        print("No devices found in the network online in this communication round.")
-                        break
-                # PoW resync chain
-                if worker.pow_resync_chain(args['verbose']):
-                    worker.update_model_after_chain_resync()
-                # worker perform local update
-                print(f"{worker.return_idx()} - worker {worker_iter+1}/{len(workers_this_round)} performing local updates...")
-                # worker associates with a miner to accept finally mined block
+            # PoW resync chain - can perform at any time
+            if worker.pow_resync_chain():
+                worker.update_model_after_chain_resync()
+            # worker (should) perform local update and associate
+            print(f"{worker.return_idx()} - worker {worker_iter+1}/{len(workers_this_round)} associating with a validator and a miner, if online...")
+            # worker associates with a miner to accept finally mined block
+            if worker.online_switcher():
                 associated_miner = worker.associate_with_device("miner")
                 if not associated_miner:
                     print(f"Cannot find a qualified miner in {worker.return_idx()} peer list.")
                     continue
+                else:
+                    print(f"Worker {worker.return_idx()} associates with miner {associated_miner.return_idx()}")
                 associated_miner.add_device_to_association(worker)
-                # worker associates with a validator
+            # worker associates with a validator
+            if worker.online_switcher():
                 associated_validator = worker.associate_with_device("validator")
                 if not associated_validator:
                     print(f"Cannot find a qualified validator in {worker.return_idx()} peer list.")
                     continue
+                else:
+                    print(f"Worker {worker.return_idx()} associates with validator {associated_validator.return_idx()}")
                 associated_validator.add_device_to_association(worker)
-                # simulate the situation that worker may go offline during model updates transmission
-                worker.online_switcher()
-            else:
-                print(f"{worker.return_idx()} - worker {worker_iter+1}/{len(workers_this_round)} is offline")
+
         
-        ''' Step 2 - validators accept local updates and broadcast to other validators in their respective peer lists (workers local_updates() are called in this step.'''
-        print()
+        print(''' Step 2 - validators accept local updates and broadcast to other validators in their respective peer lists (workers local_updates() are called in this step.''')
         for validator_iter in range(len(validators_this_round)):
             validator = validators_this_round[validator_iter]
-            if validator.is_online():
-                # update peer list
-                if not validator.update_peer_list(args['verbose']):
-                    # peer_list_empty, randomly register with a online node
-                    if not register_in_the_network(validator, check_online=True):
-                        print("No devices found in the network online in this communication round.")
-                        break
-                # PoW resync chain
-                if validator.pow_resync_chain(args['verbose']):
-                    validator.update_model_after_chain_resync()
-                # validator accepts local updates from its workers association
-                print(f"{validator.return_idx()} - validator {validator_iter+1}/{len(validators_this_round)} accepting workers' updates with link speed {validator.return_link_speed()} bytes/s...")
-                potential_offline_workers = set()
-                associated_workers = validator.return_associated_workers()
-                if not associated_workers:
-                    print(f"No workers are associated with validator {validator.return_idx()} for this communication round.")
-                    continue
-                # workers local_updates() called here as their updates are restrained by validators' acception time and size
-                validator_link_speed = validator.return_link_speed()
-                # records_dict for debugging purposes
-                records_dict = dict.fromkeys(associated_workers, None)
-                for worker, _ in records_dict.items():
-                    records_dict[worker] = {}
-                # used for arrival time easy sorting
-                # no matter time limit specified, this determines the order to be recorded in the block before the block size limit has been reached
-                transaction_arrival_queue = {}
-                # determine the transactions to accept by time limit
-                # TODO change this to miner_acception_wait_time!!!
-                if args['miner_acception_wait_time']:
-                    # wati time has specified. let each worker do local_updates till time limit
-                    for worker in associated_workers:
-                        if not worker.return_idx() in validator.return_black_list():
-                            if worker.is_online():
-                                total_time_tracker = 0
-                                epoch_seq = 1
-                                while total_time_tracker < validator.return_miner_acception_wait_time():
-                                    local_update_spent_time = worker.worker_local_update(rewards)
-                                    worker_link_speed = worker.return_link_speed()
-                                    unverified_transaction = worker.return_local_updates_and_signature(comm_round)
-                                    # size in bytes, usually around 35000 bytes per transaction
-                                    unverified_transactions_size = getsizeof(str(unverified_transaction))
-                                    transmission_delay = unverified_transactions_size/validator_link_speed if validator_link_speed < worker_link_speed else unverified_transactions_size/worker_link_speed
-                                    if local_update_spent_time + transmission_delay > validator.return_miner_acception_wait_time():
-                                        # last transaction sent passes the acception time window
-                                        break
-                                    records_dict[worker][epoch_seq] = {}
-                                    records_dict[worker][epoch_seq]['local_update_time'] = local_update_spent_time
-                                    records_dict[worker][epoch_seq]['transmission_delay'] = transmission_delay
-                                    records_dict[worker][epoch_seq]['local_update_unverified_transaction'] = unverified_transaction
-                                    records_dict[worker][epoch_seq]['local_update_unverified_transaction_size'] = unverified_transactions_size
-                                    if epoch_seq == 1:
-                                        total_time_tracker = local_update_spent_time + transmission_delay
-                                    else:
-                                        total_time_tracker = total_time_tracker - records_dict[worker][epoch_seq - 1]['transmission_delay'] + local_update_spent_time + transmission_delay
-                                    records_dict[worker][epoch_seq]['arrival_time'] = total_time_tracker
+            # PoW resync chain
+            if validator.pow_resync_chain():
+                validator.update_model_after_chain_resync()
+            # validator accepts local updates from its workers association
+            validator_link_speed = validator.return_link_speed()
+            print(f"{validator.return_idx()} - validator {validator_iter+1}/{len(validators_this_round)} is accepting workers' updates with link speed {validator_link_speed} bytes/s, if online...")
+            associated_workers = validator.return_associated_workers()
+            if not associated_workers:
+                print(f"No workers are associated with validator {validator.return_idx()} for this communication round.")
+                continue
+            # records_dict used to record transmission delay for each epoch to determine the next epoch updates arrival time
+            records_dict = dict.fromkeys(associated_workers, None)
+            for worker, _ in records_dict.items():
+                records_dict[worker] = {}
+            # used for arrival time easy sorting for later validator broadcasting (and miners' acception order)
+            transaction_arrival_queue = {}
+            # workers local_updates() called here as their updates transmission may be restrained by miners' acception time and/or size
+            for worker in associated_workers:
+                if not worker.return_idx() in validator.return_black_list():
+                    if args['miner_acception_wait_time']:
+                        print(f"miner wati time has specified as {args['miner_acception_wait_time']} seconds. let each worker do local_updates till time limit")             
+                        total_time_tracker = 0
+                        update_iter = 1
+                        worker_link_speed = worker.return_link_speed()
+                        lower_link_speed = validator_link_speed if validator_link_speed < worker_link_speed else worker_link_speed
+                        while total_time_tracker < validator.return_miner_acception_wait_time():
+                            # simulate the situation that worker may go offline during model updates transmission to the validator, based on per transaction
+                            if worker.online_switcher():
+                                local_update_spent_time = worker.worker_local_update(rewards)
+                                unverified_transaction = worker.return_local_updates_and_signature(comm_round)
+                                # size in bytes, usually around 35000 bytes per transaction
+                                unverified_transactions_size = getsizeof(str(unverified_transaction))
+                                transmission_delay = unverified_transactions_size/lower_link_speed
+                                if local_update_spent_time + transmission_delay > validator.return_miner_acception_wait_time():
+                                    # last transaction sent passes the acception time window
+                                    break
+                                records_dict[worker][update_iter] = {}
+                                records_dict[worker][update_iter]['local_update_time'] = local_update_spent_time
+                                records_dict[worker][update_iter]['transmission_delay'] = transmission_delay
+                                records_dict[worker][update_iter]['local_update_unverified_transaction'] = unverified_transaction
+                                records_dict[worker][update_iter]['local_update_unverified_transaction_size'] = unverified_transactions_size
+                                if update_iter == 1:
+                                    total_time_tracker = local_update_spent_time + transmission_delay
+                                else:
+                                    total_time_tracker = total_time_tracker - records_dict[worker][update_iter - 1]['transmission_delay'] + local_update_spent_time + transmission_delay
+                                records_dict[worker][update_iter]['arrival_time'] = total_time_tracker
+                                if validators.online_switcher():
+                                    # accept this transaction only if the validator is online
                                     transaction_arrival_queue[total_time_tracker] = unverified_transaction
-                                    # transaction_arrival_queue[total_time_tracker]['worker'] = worker
-                                    # transaction_arrival_queue[total_time_tracker]['epoch'] = epoch_seq
-                                    epoch_seq += 1
                             else:
-                                potential_offline_workers.add(worker)
-                                if args["verbose"]:
-                                    print(f"worker {worker.return_idx()} is offline when accepting transaction. Removed from peer list.")
-                        else:
-                            print(f"worker {worker.return_idx()} in validator {validator.return_idx()}'s black list. This worker's transactions won't be accpeted.")
-                    # workers local updates done by time limit
-                    # begin self-verification, parimarily due to validated_size_limit may be specified
-                    # sort arrival time of all possible transactions
-                    #ordered_transaction_arrival_queue = sorted(transaction_arrival_queue.items())
-                    #validator.set_unordered_arrival_time_accepted_worker_transactions(transaction_arrival_queue)
-                    
-                        # else:
-                        #     print(f"transaction arrived at {transaction_record[0]}s by worker {by_worker.return_idx()} at local epoch {epoch_seq} did not pass the signature verification.")
-                        
-                else:
-                    # did not specify wait time. every associated worker perform specified number of local epochs
-                    for worker in associated_workers:
-                        if not worker.return_idx() in validator.return_black_list():
-                            if worker.is_online():
+                                # TODO - add print()
+                                # worker goes offline and skip updating for one transaction, wasted the time of one update and transmission
+                                wasted_update_time, wasted_update_params = worker.waste_one_epoch_local_update_time()
+                                wasted_update_params_size = getsizeof(str(wasted_update_params))
+                                wasted_transmission_delay = wasted_update_params_size/lower_link_speed
+                                if wasted_update_time + wasted_transmission_delay > validator.return_miner_acception_wait_time():
+                                    # wasted transaction "arrival" passes the acception time window
+                                    break
+                                records_dict[worker][update_iter] = {}
+                                records_dict[worker][update_iter]['transmission_delay'] = transmission_delay
+                                if update_iter == 1:
+                                    total_time_tracker = wasted_update_time + wasted_transmission_delay
+                                else:
+                                    total_time_tracker = total_time_tracker - records_dict[worker][update_iter - 1]['transmission_delay'] + wasted_update_time + wasted_transmission_delay
+                            update_iter += 1
+                    else:
+                        # did not specify wait time. every associated worker perform specified number of local epochs
+                        for worker in associated_workers:
+                            if worker.online_switcher():
                                 local_update_spent_time = worker.worker_local_update(rewards, local_epochs=args['default_local_epochs'])
                                 worker_link_speed = worker.return_link_speed()
+                                lower_link_speed = validator_link_speed if validator_link_speed < worker_link_speed else worker_link_speed
                                 unverified_transaction = worker.return_local_updates_and_signature(comm_round)
                                 unverified_transactions_size = getsizeof(str(unverified_transaction))
-                                transmission_delay = unverified_transactions_size/validator_link_speed if validator_link_speed < worker_link_speed else unverified_transactions_size/worker_link_speed
-                                transaction_arrival_queue[local_update_spent_time + transmission_delay] = unverified_transaction
-                            else:
-                                potential_offline_workers.add(worker)
-                                if args["verbose"]:
-                                    print(f"worker {worker.return_idx()} is offline when accepting transactions. Removed from peer list.")
-                        else:
-                            print(f"worker {worker.return_idx()} in validator {validator.return_idx()}'s black list. This worker's transactions won't be accpeted.")
-                    #ordered_transaction_arrival_queue = sorted(transaction_arrival_queue.items())
-                validator.set_unordered_arrival_time_accepted_worker_transactions(transaction_arrival_queue)
-                # in case validator off line for accepting broadcasted transactions but can later back on line to validate the transactions itself receives
-                validator.set_transaction_for_final_validating_queue(sorted(transaction_arrival_queue.items()))
+                                transmission_delay = unverified_transactions_size/lower_link_speed
+                                if validators.online_switcher():
+                                    transaction_arrival_queue[local_update_spent_time + transmission_delay] = unverified_transaction
+                else:
+                    print(f"worker {worker.return_idx()} in validator {validator.return_idx()}'s black list. This worker's transactions won't be accpeted.")
 
-                validator.remove_peers(potential_offline_workers)
-                if not transaction_arrival_queue:
-                    print("Workers offline or disconnected while transmitting updates, or no transaction has been verified or been received due to time-out by this validator.")
-                    continue
             
-                # associate with a miner to send validated transactions
-                associated_miner = validator.associate_with_device("miner")
-                if not associated_miner:
-                    print(f"Cannot find a qualified miner in validator {validator.return_idx()} peer list.")
-                    continue
-                associated_miner.add_device_to_association(validator)
+                        
+                # workers local updates done by time limit
+                # begin self-verification, parimarily due to validated_size_limit may be specified
+                # sort arrival time of all possible transactions
+                #ordered_transaction_arrival_queue = sorted(transaction_arrival_queue.items())
+                #validator.set_unordered_arrival_time_accepted_worker_transactions(transaction_arrival_queue)
+                
+                    # else:
+                    #     print(f"transaction arrived at {transaction_record[0]}s by worker {by_worker.return_idx()} at local epoch {epoch_seq} did not pass the signature verification.")
+                    
+            
 
-                # broadcast to other validators
-                # may go offline at any point
-                if validator.online_switcher() and transaction_arrival_queue:
-                    validator.validator_broadcast_worker_transactions()
-                if validator.is_online():
-                    validator.online_switcher()
-            else:
-                print(f"{validator.return_idx()} - validator {worker_iter+1}/{len(workers_this_round)} is offline")
+                #ordered_transaction_arrival_queue = sorted(transaction_arrival_queue.items())
+            validator.set_unordered_arrival_time_accepted_worker_transactions(transaction_arrival_queue)
+            # in case validator off line for accepting broadcasted transactions but can later back on line to validate the transactions itself receives
+            validator.set_transaction_for_final_validating_queue(sorted(transaction_arrival_queue.items()))
+
+            if not transaction_arrival_queue:
+                print("Workers offline or disconnected while transmitting updates, or no transaction has been verified or been received due to time-out by this validator.")
+                continue
+        
+            # associate with a miner to send validated transactions
+            associated_miner = validator.associate_with_device("miner")
+            if not associated_miner:
+                print(f"Cannot find a qualified miner in validator {validator.return_idx()} peer list.")
+                continue
+            associated_miner.add_device_to_association(validator)
+
+            # broadcast to other validators
+            # may go offline at any point
+            if validator.online_switcher() and transaction_arrival_queue:
+                validator.validator_broadcast_worker_transactions()
+            if validator.is_online():
+                validator.online_switcher()
 
         ''' Step 2.5 - with the broadcasted workers transactions, validators decide the final transaction arrival order '''
         for validator_iter in range(len(validators_this_round)):
@@ -530,7 +434,7 @@ if __name__=="__main__":
                 # give a chance for validator to go back online and run its errands
                 validator.online_switcher()
                 if validator.is_back_online():
-                    if validator.pow_resync_chain(args['verbose']):
+                    if validator.pow_resync_chain():
                         validator.update_model_after_chain_resync()
             if validator.is_online():
                 final_transactions_arrival_queue = validator.return_final_transactions_validating_queue()
@@ -558,7 +462,7 @@ if __name__=="__main__":
                         print("No devices found in the network online in this communication round.")
                         break
                 # PoW resync chain
-                if miner.pow_resync_chain(args['verbose']):
+                if miner.pow_resync_chain():
                     miner.update_model_after_chain_resync()
                 # miner accepts local updates from its workers association
                 print(f"{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} accepting validators' sig verified transactions...")
@@ -645,7 +549,7 @@ if __name__=="__main__":
                 # give a chance for miner to go back online and run its errands
                 miner.online_switcher()
                 if miner.is_back_online():
-                    if miner.pow_resync_chain(args['verbose']):
+                    if miner.pow_resync_chain():
                         miner.update_model_after_chain_resync()
             if miner.is_online():
                 final_transactions_arrival_queue = miner.return_final_transactions_mining_queue()
@@ -750,7 +654,7 @@ if __name__=="__main__":
                 # give a chance for miner to go back online and run its errands
                 miner.online_switcher()
                 if miner.is_back_online():
-                    if miner.pow_resync_chain(args['verbose']):
+                    if miner.pow_resync_chain():
                         miner.update_model_after_chain_resync()
             if miner.is_online():
                 # add self mined block to the processing queue and sort by time
@@ -862,7 +766,7 @@ if __name__=="__main__":
             if not miner.is_online():
                 miner.online_switcher()
                 if miner.is_back_online():
-                    if miner.pow_resync_chain(args['verbose']):
+                    if miner.pow_resync_chain():
                         miner.update_model_after_chain_resync()
             if miner.is_online():
                 # miner.set_block_to_add(block_to_propagate)
@@ -902,7 +806,7 @@ if __name__=="__main__":
             if not miner.is_online():
                 miner.online_switcher()
                 if miner.is_back_online():
-                    if miner.pow_resync_chain(args['verbose']):
+                    if miner.pow_resync_chain():
                         miner.update_model_after_chain_resync()
             if miner.is_online():
                 if miner.return_has_added_block(): # TODO
@@ -917,7 +821,7 @@ if __name__=="__main__":
                         if not worker.is_online():
                             worker.online_switcher()
                             if worker.is_back_online():
-                                if worker.pow_resync_chain(args['verbose']):
+                                if worker.pow_resync_chain():
                                     worker.update_model_after_chain_resync()
                         if worker.is_online():
                             # worker_last_block_hash[worker.return_idx()] = {}
@@ -951,7 +855,7 @@ if __name__=="__main__":
             if not worker.is_online():
                 worker.online_switcher()
                 if worker.is_back_online():
-                    if worker.pow_resync_chain(args['verbose']):
+                    if worker.pow_resync_chain():
                         worker.update_model_after_chain_resync()
             if worker.is_online():
                 print(f'Worker {worker.return_idx()} is doing global update...')
@@ -962,7 +866,7 @@ if __name__=="__main__":
                     worker.set_accuracy_this_round(accuracy)
                     report_msg = f'Worker {worker.return_idx()} at the communication round {comm_round+1} with chain length {worker.return_blockchain_object().return_chain_length()} has accuracy: {accuracy}\n'
                     print(report_msg)
-                    workers_accuracies_records[worker.return_idx()][f'round_{comm_round}'] = accuracy
+                    devices_accuracies_records[worker.return_idx()][f'round_{comm_round}'] = accuracy
                     worker.online_switcher()
                 else:
                     print(f'No block has been sent to worker {worker.return_idx()}. Skipping global update.\n')
@@ -970,7 +874,7 @@ if __name__=="__main__":
         # record accuries in log file
         log_file_path = f"logs/accuracy_report_{date_time}.txt"
         open(log_file_path, 'w').close()
-        for device_idx, accuracy_records in workers_accuracies_records.items():
+        for device_idx, accuracy_records in devices_accuracies_records.items():
             accuracy_list = []
             for accuracy in accuracy_records.values():
                 accuracy_list.append(accuracy)
@@ -999,7 +903,7 @@ if __name__=="__main__":
                         print("No devices found in the network online in this communication round.")
                         break
                 # PoW resync chain
-                if validator.pow_resync_chain(args['verbose']):
+                if validator.pow_resync_chain():
                     validator.update_model_after_chain_resync()
                 last_block_on_validator_chain = validator.return_blockchain_object().return_last_block()
                 print(f"{validator.return_idx()} - validator {validator_iter+1}/{len(validators_this_round)} accepting workers' accuracies...")
@@ -1047,7 +951,7 @@ if __name__=="__main__":
             if not miner.is_online():
                 miner.online_switcher()
                 if miner.is_back_online():
-                    if miner.pow_resync_chain(args['verbose']):
+                    if miner.pow_resync_chain():
                         miner.update_model_after_chain_resync()
             if miner.is_online():
                 # update peer list
@@ -1057,7 +961,7 @@ if __name__=="__main__":
                         print("No devices found in the network online in this communication round.")
                         break
                 # PoW resync chain
-                if miner.pow_resync_chain(args['verbose']):
+                if miner.pow_resync_chain():
                     miner.update_model_after_chain_resync()
                 # miner accepts validator transactions
                 miner.miner_reset_vars_for_new_validation_round()
@@ -1095,7 +999,7 @@ if __name__=="__main__":
             if not miner.is_online():
                 miner.online_switcher()
                 if miner.is_back_online():
-                    if miner.pow_resync_chain(args['verbose']):
+                    if miner.pow_resync_chain():
                         miner.update_model_after_chain_resync()
             if miner.is_online():
                 last_block_on_miner_chain = miner.return_blockchain_object().return_last_block()
@@ -1209,7 +1113,7 @@ if __name__=="__main__":
             if not miner.is_online():
                 miner.online_switcher()
                 if miner.is_back_online():
-                    if miner.pow_resync_chain(args['verbose']):
+                    if miner.pow_resync_chain():
                         miner.update_model_after_chain_resync()
             if miner.is_online():
                 # miner.set_block_to_add(block_to_propagate)
@@ -1236,7 +1140,7 @@ if __name__=="__main__":
             if not miner.is_online():
                 miner.online_switcher()
                 if miner.is_back_online():
-                    if miner.pow_resync_chain(args['verbose']):
+                    if miner.pow_resync_chain():
                         miner.update_model_after_chain_resync()
             if miner.is_online():
                 if miner.return_has_added_block(): # TODO
@@ -1255,7 +1159,7 @@ if __name__=="__main__":
                         if not device.is_online():
                             device.online_switcher()
                             if device.is_back_online():
-                                if device.pow_resync_chain(args['verbose']):
+                                if device.pow_resync_chain():
                                     device.update_model_after_chain_resync()
                         if device.is_online():
                             # worker_last_block_hash[worker.return_idx()] = {}

@@ -36,6 +36,8 @@ class Device:
             self.link_speed = base_data_transmission_speed
         else:
             self.link_speed = random.random() * base_data_transmission_speed
+        self.devices_list = None
+        self.aio = False
         ''' simulating hardware equipment strength, such as good processors and RAM capacity. Following recorded times will be shrunk by this value of times
         # for workers, its update time
         # for miners, its PoW time
@@ -112,6 +114,10 @@ class Device:
         
 
     ''' Common Methods '''
+    def set_devices_list_and_aio(self, devices_list, aio):
+        self.devices_list = devices_list
+        self.aio = aio
+
     def return_idx(self):
         return self.idx
 
@@ -173,19 +179,27 @@ class Device:
         return self.role
 
     def online_switcher(self):
-        self.old_status = self.on_line
+        old_status = self.on_line
         online_indicator = random.random()
         if online_indicator < self.network_stability:
             self.on_line = True
+            # if back online, update peer and resync chain
+            if old_status == False:
+                print(f"{self.idx} goes back online.")
+                # update peer list
+                self.update_peer_list()
+                # resync chain
+                if self.pow_resync_chain():
+                    self.update_model_after_chain_resync()
         else:
-            print(f"{self.idx} goes offline.")
             self.on_line = False
+            print(f"{self.idx} goes offline.")
         return self.on_line
 
-    def is_back_online(self):
-        if self.old_status == False and self.old_status != self.on_line:
-            print(f"{self.idx} goes back online.")
-            return True
+    # def is_back_online(self):
+    #     if self.old_status == False and self.old_status != self.on_line:
+    #         print(f"{self.idx} goes back online.")
+    #         return True
 
     def is_online(self):
         return self.on_line
@@ -205,21 +219,16 @@ class Device:
     def return_black_list(self):
         return self.black_list
     
-    def update_peer_list(self, verbose=False):
+    def update_peer_list(self):
         print(f"\n{self.idx} - {self.role} is updating peer list...")
         old_peer_list = copy.copy(self.peer_list)
         online_peers = set()
-        offline_peers = set()
         for peer in self.peer_list:
             if peer.is_online():
                 online_peers.add(peer)
-            else:
-                offline_peers.add(peer)
         # for online peers, suck in their peer list
         for online_peer in online_peers:
             self.add_peers(online_peer.return_peers())
-        # remove offline peers
-        self.remove_peers(offline_peers)
         # remove itself from the peer_list if there is
         self.remove_peers(self)
         # remove malicious peers
@@ -228,28 +237,27 @@ class Device:
             if peer.return_idx() in self.black_list:
                 potential_malicious_peer_set.add(peer)
         self.remove_peers(potential_malicious_peer_set)
-        if verbose:
-            if old_peer_list == self.peer_list:
-                print("Peer list NOT changed.")
-            else:
-                print("Peer list has been changed.")
-                removed_peers = offline_peers.union(potential_malicious_peer_set)
-                added_peers = self.peer_list.difference(old_peer_list)
-                if removed_peers:
-                    print("These peers are removed")
-                    for peer in removed_peers:
-                        print(f"d_{peer.return_idx().split('_')[-1]} - {peer.return_role()[0]}", end=', ')
-                    print()
-                if added_peers:
-                    print("These peers are added")
-                    for peer in added_peers:
-                        print(f"d_{peer.return_idx().split('_')[-1]} - {peer.return_role()[0]}", end=', ')
-                    print()
-                print("Final peer list:")
-                for peer in self.peer_list:
+        # print updated peer result
+        if old_peer_list == self.peer_list:
+            print("Peer list NOT changed.")
+        else:
+            print("Peer list has been changed.")
+            added_peers = self.peer_list.difference(old_peer_list)
+            if potential_malicious_peer_set:
+                print("These malicious peers are removed")
+                for peer in removed_peers:
                     print(f"d_{peer.return_idx().split('_')[-1]} - {peer.return_role()[0]}", end=', ')
                 print()
-        # if peer_list ends up empty, randomly register with another device
+            if added_peers:
+                print("These peers are added")
+                for peer in added_peers:
+                    print(f"d_{peer.return_idx().split('_')[-1]} - {peer.return_role()[0]}", end=', ')
+                print()
+            print("Final peer list:")
+            for peer in self.peer_list:
+                print(f"d_{peer.return_idx().split('_')[-1]} - {peer.return_role()[0]}", end=', ')
+            print()
+        # WILL ALWAYS RETURN TRUE AS OFFLINE PEERS WON'T BE REMOVED ANY MORE, UNLESS ALL PEERS ARE MALICIOUS...but then it should not register with any other peer. Original purpose - if peer_list ends up empty, randomly register with another device
         return False if not self.peer_list else True
 
     def return_blockchain_object(self):
@@ -283,7 +291,7 @@ class Device:
                     return False
         return True
 
-    def pow_resync_chain(self, verbose=False):
+    def pow_resync_chain(self):
         longest_chain = None
         updated_from_peer = None
         curr_chain_len = self.return_blockchain_object().return_chain_length()
@@ -308,12 +316,10 @@ class Device:
             #     if chain_structure_before_replace[block_iter].compute_hash(hash_entire_block=True) != longest_chain_structure[block_iter].compute_hash(hash_entire_block=True):
             #         break
             self.return_blockchain_object().replace_chain(longest_chain_structure)
-            if verbose:
-                print(f"{self.idx} chain resynced from peer {updated_from_peer}.")
+            print(f"{self.idx} chain resynced from peer {updated_from_peer}.")
             #return block_iter
-            return True
-        if verbose:
-            print("Chain not resynced.")
+            return True 
+        print("Chain not resynced.")
         return False
 
     def receive_rewards(self, rewards):
@@ -467,6 +473,32 @@ class Device:
     def return_pow_difficulty(self):
         return self.pow_difficulty
 
+    def register_in_the_network(self, check_online=False):
+        if self.aio:
+            self.add_peers(set(self.devices_list))
+        else:
+            potential_registrars = set(self.devices_list)
+            # it cannot register with itself
+            potential_registrars.discard(self)        
+            # pick a registrar
+            registrar = random.sample(potential_registrars, 1)[0]
+            if check_online:
+                if not registrar.is_online():
+                    online_registrars = set()
+                    for registrar in potential_registrars:
+                        if registrar.is_online():
+                            online_registrars.add(registrar)
+                    if not online_registrars:
+                        return False
+                    registrar = random.sample(online_registrars, 1)[0]
+            # registrant add registrar to its peer list
+            self.add_peers(registrar)
+            # this device sucks in registrar's peer list
+            self.add_peers(registrar.return_peers())
+            # registrar adds registrant(must in this order, or registrant will add itself from registrar's peer list)
+            registrar.add_peers(self)
+            return True
+            
     ''' Worker '''
     def add_noise_to_weights(self, m):
         with torch.no_grad():
@@ -505,7 +537,28 @@ class Device:
         print(f"Done {local_epochs} epoch(s) and total {self.local_total_epoch} epochs")
         self.local_train_parameters = self.net.state_dict()
         return self.local_update_time
-        
+
+    # used to simulate time waste when worker goes offline during transmission to validator
+    def waste_one_epoch_local_update_time(self):
+        if self.computation_power == 0:
+            return float('inf')
+        else:
+            evaluation_net = copy.deepcopy(self.net)
+            currently_used_lr = 0.01
+            for param_group in self.opti.param_groups:
+                currently_used_lr = param_group['lr']
+            from torch import optim
+            evaluation_opti = optim.SGD(evaluation_net.parameters(), lr=currently_used_lr)
+            local_update_time = time.time()
+            for data, label in self.train_dl:
+                data, label = data.to(self.dev), label.to(self.dev)
+                preds = evaluation_net(data)
+                loss = self.loss_func(preds, label)
+                loss.backward()
+                evaluation_opti.step()
+                evaluation_opti.zero_grad()
+            return (time.time() - local_update_time)/self.computation_power, evaluation_net.state_dict()
+
     # def return_local_update_time(self):
     #     return self.local_update_time
 
@@ -1009,27 +1062,17 @@ class Device:
         return self.mined_block
 
     def associate_with_device(self, to_associate_device_role):
-        to_associate_devices_in_peer_list = set()
-        for peer in self.peer_list:
-            if peer.return_role() == to_associate_device_role:
+        to_associate_device = vars(self)[f'{self.role}_associated_{to_associate_device_role}']
+        shuffled_peer_list = list(self.peer_list)
+        random.shuffle(shuffled_peer_list)
+        for peer in shuffled_peer_list:
+            # select the first found eligible device from a shuffled order
+            if peer.return_role() == to_associate_device_role and peer.is_online():
                 if not peer.return_idx() in self.black_list:
-                    to_associate_devices_in_peer_list.add(peer)
-        if not to_associate_devices_in_peer_list:
+                    to_associate_device = peer
+        if not to_associate_device:
             # there is no device matching the required associated role in this device's peer list
             return False
-        # associate with a device from list
-        to_associate_device = vars(self)[f'{self.role}_associated_{to_associate_device_role}']
-        to_associate_device = random.sample(to_associate_devices_in_peer_list, 1)[0]
-        # check if the associated device is online
-        while not to_associate_device.is_online():
-            # remove from peer list and candidate list
-            self.remove_peers(to_associate_device)
-            to_associate_devices_in_peer_list.discard(to_associate_device)
-            if not to_associate_devices_in_peer_list:
-                # no devices required to be associated are online
-                return False
-            # reselect a device
-            to_associate_device = random.sample(validators_in_peer_list, 1)[0]
         print(f"{self.role} {self.idx} associated with {to_associate_device.return_role()} {to_associate_device.return_idx()}")
         return to_associate_device
 
