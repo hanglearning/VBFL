@@ -1,0 +1,14 @@
+device_7 worker B: 0.25
+device_10 worker B: 0.25
+device_2 worker B: 0.25
+device_12 worker B: 0.25
+device_5 worker B: 0.25
+device_13 worker M: 0.25
+device_9 worker M: 0.25
+device_6 miner B: 0.25
+device_8 miner B: 0.25
+device_11 miner M: 0.25
+device_1 validator M: 0.25
+device_3 validator B: 0.25
+device_4 validator B: 0.25
+comm_end_time: 100.67153596878052
