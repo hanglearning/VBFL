@@ -7,20 +7,26 @@ log_files_folder_path = f"logs/{latest_log_folder_name}"
 
 all_rounds_log_files = sorted([f for f in listdir(log_files_folder_path) if f.startswith('comm')])
 
-# get num of devices
+# get num of devices with their maliciousness
+benign_devices_idx_list = []
+malicious_devices_idx_list = []
 comm_1_file_path = f"{log_files_folder_path}/comm_1.txt"
 file = open(comm_1_file_path,"r") 
-Counter = 0
-# Reading from file 
-Content = file.read() 
-CoList = Content.split("\n") 
-for i in CoList: 
-    if i: 
-        Counter += 1
-device_count = Counter - 3
-# done getting num of devices
+log_whole_text = file.read() 
+lines_list = log_whole_text.split("\n")
+for line in lines_list:
+    if line.startswith('device'):
+        device_idx = line.split(":")[0].split(" ")[0]
+        device_maliciousness = line.split(":")[0].split(" ")[-1]
+        if device_maliciousness == 'M':
+            malicious_devices_idx_list.append(f"{device_idx} {device_maliciousness}")
+        else:
+            benign_devices_idx_list.append(f"{device_idx} {device_maliciousness}")
+    
+devices_idx_list = sorted(malicious_devices_idx_list, key=lambda k: int(k.split(" ")[0].split('_')[-1])) + sorted(benign_devices_idx_list, key=lambda k: int(k.split(" ")[0].split('_')[-1]))
 
-devices_accuracies_across_rounds = dict.fromkeys([f"device_{i}" for i in range(1, device_count + 1)])
+devices_accuracies_across_rounds = dict.fromkeys(devices_idx_list)
+
 for worker_idx, _ in devices_accuracies_across_rounds.items():
     devices_accuracies_across_rounds[worker_idx] = []
 round_time_record = []
@@ -33,8 +39,10 @@ for log_file in all_rounds_log_files:
     for line in lines_list:
         if line.startswith('device'):
             device_idx = line.split(":")[0].split(" ")[0]
+            device_maliciousness = line.split(":")[0].split(" ")[-1]
+            device_id_mali = f"{device_idx} {device_maliciousness}"
             accuracy = round(float(line.split(":")[-1]), 3)
-            devices_accuracies_across_rounds[device_idx].append(accuracy)
+            devices_accuracies_across_rounds[device_id_mali].append(accuracy)
         if line.startswith('comm_spent_time'):
             spent_time = round(float(line.split(":")[-1]), 2)
             round_time_record.append(spent_time)

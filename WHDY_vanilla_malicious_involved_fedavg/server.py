@@ -31,11 +31,11 @@ parser.add_argument('-st', '--shard_test_data', type=int, default=0, help='it is
 
 if __name__=="__main__":
 
-    date_time = datetime.now().strftime("%d%m%Y_%H%M%S")
+    date_time = datetime.now().strftime("%m%d%Y_%H%M%S")
 
     # 1. parse arguments and save to file
     # create folder of logs
-    log_files_folder_path = f"logs/{date_time}"
+    log_files_folder_path = f"WHDY_vanilla_malicious_involved_fedavg/logs/{date_time}"
     os.mkdir(log_files_folder_path)
 
     # save arguments used 

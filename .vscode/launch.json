@@ -13,6 +13,13 @@
             "args": ["-nd", "14", "-B", "10", "-mn", "mnist_cnn", "-max_ncomm", "99999999", "-iid", "0", "-lr", "0.01", "-g", "0", "-ns", "1", "-v", "1", "-ha", "10,2,2", "-aio", "1", "-st", "0", "-nm", "3", "-mt", "0.0"]
         },
         {
+            "name": "server.py",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/WHDY_vanilla_malicious_involved_fedavg/server.py",
+            "console": "integratedTerminal"
+        },
+        {
             "name": "plot_graph.py",
             "type": "python",
             "request": "launch",
