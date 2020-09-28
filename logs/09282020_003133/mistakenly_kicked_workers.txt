@@ -1,0 +1,28 @@
+WARNING: device_11 has mistakenly regard device_9 as a malicious worker device in comm_round 3!
+WARNING: device_11 has mistakenly regard device_6 as a malicious worker device in comm_round 3!
+WARNING: device_8 has mistakenly regard device_9 as a malicious worker device in comm_round 3!
+WARNING: device_8 has mistakenly regard device_6 as a malicious worker device in comm_round 3!
+WARNING: device_6 has mistakenly regard device_9 as a malicious worker device in comm_round 3!
+WARNING: device_6 has mistakenly regard device_6 as a malicious worker device in comm_round 3!
+WARNING: device_1 has mistakenly regard device_9 as a malicious worker device in comm_round 3!
+WARNING: device_1 has mistakenly regard device_6 as a malicious worker device in comm_round 3!
+WARNING: device_7 has mistakenly regard device_6 as a malicious worker device in comm_round 3!
+WARNING: device_7 has mistakenly regard device_9 as a malicious worker device in comm_round 3!
+WARNING: device_12 has mistakenly regard device_6 as a malicious worker device in comm_round 3!
+WARNING: device_12 has mistakenly regard device_9 as a malicious worker device in comm_round 3!
+WARNING: device_9 has mistakenly regard device_9 as a malicious worker device in comm_round 3!
+WARNING: device_9 has mistakenly regard device_6 as a malicious worker device in comm_round 3!
+WARNING: device_2 has mistakenly regard device_6 as a malicious worker device in comm_round 3!
+WARNING: device_2 has mistakenly regard device_9 as a malicious worker device in comm_round 3!
+WARNING: device_13 has mistakenly regard device_6 as a malicious worker device in comm_round 3!
+WARNING: device_13 has mistakenly regard device_9 as a malicious worker device in comm_round 3!
+WARNING: device_3 has mistakenly regard device_9 as a malicious worker device in comm_round 3!
+WARNING: device_3 has mistakenly regard device_6 as a malicious worker device in comm_round 3!
+WARNING: device_14 has mistakenly regard device_6 as a malicious worker device in comm_round 3!
+WARNING: device_14 has mistakenly regard device_9 as a malicious worker device in comm_round 3!
+WARNING: device_4 has mistakenly regard device_9 as a malicious worker device in comm_round 3!
+WARNING: device_4 has mistakenly regard device_6 as a malicious worker device in comm_round 3!
+WARNING: device_10 has mistakenly regard device_9 as a malicious worker device in comm_round 3 when resyncing!
+WARNING: device_10 has mistakenly regard device_6 as a malicious worker device in comm_round 3 when resyncing!
+WARNING: device_5 has mistakenly regard device_9 as a malicious worker device in comm_round 3 when resyncing!
+WARNING: device_5 has mistakenly regard device_6 as a malicious worker device in comm_round 3 when resyncing!

@@ -25,9 +25,9 @@ import time
 from datetime import datetime
 import copy
 from sys import getsizeof
+import sqlite3
 import torch
 import torch.nn.functional as F
-from torch import optim
 from Models import Mnist_2NN, Mnist_CNN
 from Device import Device, DevicesInNetwork
 from Block import Block
@@ -43,12 +43,13 @@ parser.add_argument('-v', '--verbose', type=int, default=0, help='print verbose 
 parser.add_argument('-B', '--batchsize', type=int, default=10, help='local train batch size')
 parser.add_argument('-mn', '--model_name', type=str, default='mnist_2nn', help='the model to train')
 parser.add_argument('-lr', "--learning_rate", type=float, default=0.01, help="learning rate, use value from origin paper as default")
+parser.add_argument('-op', '--optimizer', type=str, default="SGD", help='optimizer to be used, by default implementing stochastic gradient descent')
 parser.add_argument('-iid', '--IID', type=int, default=0, help='the way to allocate data to clients')
 parser.add_argument('-max_ncomm', '--max_num_comm', type=int, default=1000, help='maximum number of communication rounds, may terminate early if converges')
 parser.add_argument('-nd', '--num_devices', type=int, default=100, help='numer of the devices in the simulation network')
 parser.add_argument('-st', '--shard_test_data', type=int, default=0, help='it is easy to see the global models are consistent across devices when the test dataset is NOT sharded')
 parser.add_argument('-nm', '--num_malicious', type=int, default=0, help="number of malicious nodes in the network. malicious node's data sets will be introduced Gaussian noise")
-parser.add_argument('-le', '--default_local_epochs', type=int, default=3, help='local train epoch. Train local model by this same num of epochs for each worker, if -mt is not specified')
+parser.add_argument('-le', '--default_local_epochs', type=int, default=5, help='local train epoch. Train local model by this same num of epochs for each worker, if -mt is not specified')
 
 # blockchain system consensus attributes
 parser.add_argument('-gr', '--general_rewards', type=int, default=1, help='rewards for providing data, verification of one transaction, mining and so forth')
@@ -56,9 +57,10 @@ parser.add_argument('-ko', '--knock_out_rounds', type=int, default=3, help="a wo
 parser.add_argument('-lo', '--lazy_worker_knock_out_rounds', type=int, default=6, help="a worker device is kicked out of the device's peer list(put in black list) if it does not provide updates for this number of rounds, due to too slow or just lazy to do updates and only accept the model udpates.(do not care lazy validator or miner as they will just not receive rewards)")
 parser.add_argument('-pow', '--pow_difficulty', type=int, default=0, help="if set to 0, meaning miners are using PoS")
 
-# blockchain FL restriction attributes
+# blockchain FL validator/miner restriction tuning parameters
 parser.add_argument('-mt', '--miner_acception_wait_time', type=float, default=0.0, help="default time window for miners to accept transactions, in seconds. 0 means no time limit, and each device will just perform same amount(-le) of epochs per round like in FedAvg paper")
 parser.add_argument('-ml', '--miner_accepted_transactions_size_limit', type=float, default=0.0, help="no further transactions will be accepted by miner after this limit. 0 means no size limit. either this or -mt has to be specified, or both. This param determines the final block_size")
+parser.add_argument('-vh', '--validator_threshold', type=float, default=0.0, help="a threshold value of accuracy difference to determine malicious worker")
 
 # debug attributes
 parser.add_argument('-ha', '--hard_assign', type=str, default='*,*,*', help='hard assign number of roles in the network, order by worker, miner and validator')
@@ -71,16 +73,28 @@ parser.add_argument('-ecp', '--even_computation_power', type=int, default=1, hel
 
 # parser.add_argument('-sp', '--save_path', type=str, default='./checkpoints', help='the saving path of checkpoints')
 # parser.add_argument('-la', '--least_assign', type=str, default='*,*,*', help='the assigned number of roles are at least guaranteed in the network')
-# parser.add_argument('-vh', '--validator_threshold', type=float, default=0.1, help="a threshold value of accuracy difference to determine malicious worker")
+
 
 if __name__=="__main__":
 
     ''' SETTING UP '''
-    # 1. set program running time for logging purpose
-    date_time = datetime.now().strftime("%d%m%Y_%H%M%S")
 
+    # 0. set program running time for logging purpose
+    date_time = datetime.now().strftime("%m%d%Y_%H%M%S")
+
+    # 1. parse arguments and save to file
+    # create folder of logs
+    log_files_folder_path = f"logs/{date_time}"
+    os.mkdir(log_files_folder_path)
+    # save arguments used 
     args = parser.parse_args()
     args = args.__dict__
+    with open(f'{log_files_folder_path}/args_used.txt', 'w') as f:
+        f.write("Command line arguments used -\n")
+        f.write(' '.join(sys.argv[1:]))
+        f.write("\n\nAll arguments used -\n")
+        for arg_name, arg in args.items():
+            f.write(f'--{arg_name} {arg} ')
 
     # 2. for demonstration purposes, this reward is for every rewarded action
     rewards = args["general_rewards"]
@@ -136,12 +150,11 @@ if __name__=="__main__":
     print(f"{torch.cuda.device_count()} GPUs are available to use!")
     net = net.to(dev)
 
-    # 6. set loss_function and optimizer
+    # 6. set loss_function
     loss_func = F.cross_entropy
-    opti = optim.SGD(net.parameters(), lr=args['learning_rate'])
 
     # 7. create devices in the network
-    devices_in_network = DevicesInNetwork(data_set_name='mnist', is_iid=args['IID'], batch_size = args['batchsize'], loss_func = loss_func, opti = opti, num_devices=num_devices, network_stability=args['network_stability'], net=net, dev=dev, knock_out_rounds=args['knock_out_rounds'], lazy_worker_knock_out_rounds=args['lazy_worker_knock_out_rounds'], shard_test_data=args['shard_test_data'], miner_acception_wait_time=args['miner_acception_wait_time'], miner_accepted_transactions_size_limit=args['miner_accepted_transactions_size_limit'], pow_difficulty=args['pow_difficulty'], even_link_speed_strength=args['even_link_speed_strength'], base_data_transmission_speed=args['base_data_transmission_speed'], even_computation_power=args['even_computation_power'], num_malicious=num_malicious)
+    devices_in_network = DevicesInNetwork(data_set_name='mnist', is_iid=args['IID'], batch_size = args['batchsize'], learning_rate =  args['learning_rate'], loss_func = loss_func, opti = args['optimizer'], num_devices=num_devices, network_stability=args['network_stability'], net=net, dev=dev, knock_out_rounds=args['knock_out_rounds'], lazy_worker_knock_out_rounds=args['lazy_worker_knock_out_rounds'], shard_test_data=args['shard_test_data'], miner_acception_wait_time=args['miner_acception_wait_time'], miner_accepted_transactions_size_limit=args['miner_accepted_transactions_size_limit'], validator_threshold=args['validator_threshold'], pow_difficulty=args['pow_difficulty'], even_link_speed_strength=args['even_link_speed_strength'], base_data_transmission_speed=args['base_data_transmission_speed'], even_computation_power=args['even_computation_power'], num_malicious=num_malicious)
     devices_list = list(devices_in_network.devices_set.values())
 
     # 8. register devices and initialize global parameterms
@@ -161,13 +174,25 @@ if __name__=="__main__":
     for device_seq, device in devices_in_network.devices_set.items():
         devices_accuracies_records[device_seq] = {}
 
-    # 10. build logging files path
-    # create folder of logs
-    logging_files_folder_path = f"logs/{date_time}"
-    os.mkdir(logging_files_folder_path)
-    open(f"{logging_files_folder_path}/kicked_workers.txt", 'w').close()
-    open(f"{logging_files_folder_path}/kicked_validators.txt", 'w').close()
-    open(f"{logging_files_folder_path}/kicked_lazy_workers.txt", 'w').close()
+    # 10. build logging files/database path
+    # create log files
+    open(f"{log_files_folder_path}/correctly_kicked_workers.txt", 'w').close()
+    open(f"{log_files_folder_path}/mistakenly_kicked_workers.txt", 'w').close()
+    # open(f"{log_files_folder_path}/correctly_kicked_validators.txt", 'w').close()
+    # open(f"{log_files_folder_path}/mistakenly_kicked_validators.txt", 'w').close()
+    open(f"{log_files_folder_path}/kicked_lazy_workers.txt", 'w').close()
+    # create malicious worker identification database
+    conn = sqlite3.connect(f'{log_files_folder_path}/malicious_wokrer_identifying_log.db')
+    conn_cursor = conn.cursor()
+    conn_cursor.execute("""CREATE TABLE if not exists  malicious_workers_log (
+	device_seq text,
+	if_malicious integer,
+	correctly_identified_by text,
+	incorrectly_identified_by text,
+    in_round integer,
+    when_resyncing text
+	)""")
+
 
     # 11. make chechpoint save path
     # if not os.path.isdir(args['save_path']):
@@ -262,37 +287,39 @@ if __name__=="__main__":
         print(''' Step 1 - workers assign associated miner and validator (and do local updates, but it is implemented in code block of step 2) \n''')
         for worker_iter in range(len(workers_this_round)):
             worker = workers_this_round[worker_iter]
-            # PoW resync chain - can perform at any time
+            # PoW resync chain(block could be dropped due to fork from last round)
             if worker.pow_resync_chain():
-                worker.update_model_after_chain_resync()
+                worker.update_model_after_chain_resync(log_files_folder_path, conn, conn_cursor)
             # worker (should) perform local update and associate
             print(f"{worker.return_idx()} - worker {worker_iter+1}/{len(workers_this_round)} will associate with a validator and a miner, if online...")
-            # associate with a miner to send validated transactions
-            associated_miner = validator.associate_with_device("miner")
-            if not associated_miner:
-                print(f"Cannot find a qualified miner in validator {validator.return_idx()} peer list.")
-                # continue # do not skip as it can receive a block later
-            associated_miner.add_device_to_association(validator)
             # worker associates with a miner to accept finally mined block
             if worker.online_switcher():
                 associated_miner = worker.associate_with_device("miner")
-                if not associated_miner:
+                if associated_miner:
+                    associated_miner.add_device_to_association(worker)
+                else:
                     print(f"Cannot find a qualified miner in {worker.return_idx()} peer list.")
-                associated_miner.add_device_to_association(worker)
-            # worker associates with a validator
+            # worker associates with a validator to send worker transactions
             if worker.online_switcher():
                 associated_validator = worker.associate_with_device("validator")
-                if not associated_validator:
+                if associated_validator:
+                    associated_validator.add_device_to_association(worker)
+                else:
                     print(f"Cannot find a qualified validator in {worker.return_idx()} peer list.")
-                associated_validator.add_device_to_association(worker)
-
         
         print(''' Step 2 - validators accept local updates and broadcast to other validators in their respective peer lists (workers local_updates() are called in this step.\n''')
         for validator_iter in range(len(validators_this_round)):
             validator = validators_this_round[validator_iter]
             # PoW resync chain
             if validator.pow_resync_chain():
-                validator.update_model_after_chain_resync()
+                validator.update_model_after_chain_resync(log_files_folder_path, conn, conn_cursor)
+            # associate with a miner to send post validation transactions
+            if validator.online_switcher():
+                associated_miner = validator.associate_with_device("miner")
+                if associated_miner:
+                    associated_miner.add_device_to_association(validator)
+                else:
+                    print(f"Cannot find a qualified miner in validator {validator.return_idx()} peer list.")
             # validator accepts local updates from its workers association
             associated_workers = list(validator.return_associated_workers())
             if not associated_workers:
@@ -347,7 +374,7 @@ if __name__=="__main__":
                                     print(f"validator {validator.return_idx()} offline and unable to accept this transaction")
                             else:
                                 # worker goes offline and skip updating for one transaction, wasted the time of one update and transmission
-                                wasted_update_time, wasted_update_params = worker.waste_one_epoch_local_update_time()
+                                wasted_update_time, wasted_update_params = worker.waste_one_epoch_local_update_time(args['optimizer'])
                                 wasted_update_params_size = getsizeof(str(wasted_update_params))
                                 wasted_transmission_delay = wasted_update_params_size/lower_link_speed
                                 if wasted_update_time + wasted_transmission_delay > validator.return_miner_acception_wait_time():
@@ -386,14 +413,12 @@ if __name__=="__main__":
             validator.set_unordered_arrival_time_accepted_worker_transactions(transaction_arrival_queue)
             # in case validator off line for accepting broadcasted transactions but can later back online to validate the transactions itself receives
             validator.set_transaction_for_final_validating_queue(sorted(transaction_arrival_queue.items()))
-
-            if not transaction_arrival_queue:
-                print("No transactions have been received by this validator, probably due to workers and/or validators offline or timeout while doing local updates or transmitting updates, or all workers are in validator's black list.")
-                continue
-
+            
             # broadcast to other validators
             if transaction_arrival_queue:
                 validator.validator_broadcast_worker_transactions()
+            else:
+                print("No transactions have been received by this validator, probably due to workers and/or validators offline or timeout while doing local updates or transmitting updates, or all workers are in validator's black list.")
 
 
         print(''' Step 2.5 - with the broadcasted workers transactions, validators decide the final transaction arrival order \n''')
@@ -441,7 +466,7 @@ if __name__=="__main__":
             miner = miners_this_round[miner_iter]
             # PoW resync chain
             if miner.pow_resync_chain():
-                miner.update_model_after_chain_resync()
+                miner.update_model_after_chain_resync(log_files_folder_path, conn, conn_cursor)
             print(f"{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} accepting validators' post-validation transactions...")
             associated_validators = list(miner.return_associated_validators())
             if not associated_validators:
@@ -565,6 +590,12 @@ if __name__=="__main__":
                 start_time_point = time.time()
                 candidate_block = Block(idx=miner.return_blockchain_object().return_chain_length()+1, transactions=transactions_to_record_in_block, miner_rsa_pub_key=miner.return_rsa_pub_key())
                 # mine the block
+                miner_computation_power = miner.return_computation_power()
+                if not miner_computation_power:
+                    block_generation_time_spent = float('inf')
+                    miner.set_block_generation_time_point(float('inf'))
+                    print(f"{miner.return_idx()} - miner mines a block in INFINITE time...")
+                    continue
                 recorded_transactions = candidate_block.return_transactions()
                 if recorded_transactions['valid_validator_sig_transacitons'] or recorded_transactions['valid_validator_sig_transacitons']:
                     print(f"{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} mining the block...")
@@ -586,16 +617,9 @@ if __name__=="__main__":
                     miner.sign_block(mined_block)
                     miner.set_mined_block(mined_block)
                     # record mining time
-                    miner_computation_power = miner.return_computation_power()
-                    if miner_computation_power:
-                        block_generation_time_spent = (time.time() - start_time_point)/miner_computation_power
-                        miner.set_block_generation_time_point(begin_mining_time + block_generation_time_spent)
-                        print(f"{miner.return_idx()} - miner mines a block in {block_generation_time_spent} seconds.")
-                    else:
-                        block_generation_time_spent = float('inf')
-                        miner.set_block_generation_time_point(float('inf'))
-                        print(f"{miner.return_idx()} - miner mines a block in INFINITE time...")
-                        continue
+                    block_generation_time_spent = (time.time() - start_time_point)/miner_computation_power
+                    miner.set_block_generation_time_point(begin_mining_time + block_generation_time_spent)
+                    print(f"{miner.return_idx()} - miner mines a block in {block_generation_time_spent} seconds.")
                     # immediately propagate the block
                     miner.propagated_the_block(miner.return_block_generation_time_point(), mined_block)
                 else:
@@ -604,7 +628,8 @@ if __name__=="__main__":
                 print(f"{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} did not receive any transaction from validator or miner in this round.")
 
         mining_consensus = 'PoW' if args['pow_difficulty'] else 'PoS'
-        mining_consensus = 'PoW' 
+        mining_consensus = 'PoW'
+        forking_happened = False
         if mining_consensus == 'PoW':
             print("\nselect winning block based on PoW")
             print(''' Step 6 - miners decide if adding a propagated block or its own mined block, and request its associated devices to download this block''')
@@ -612,9 +637,11 @@ if __name__=="__main__":
             # abort mining if propagated block is received
             for miner_iter in range(len(miners_this_round)):
                 miner = miners_this_round[miner_iter]
-                # add self mined block to the processing queue and sort by time
                 unordered_propagated_block_processing_queue = miner.return_unordered_propagated_block_processing_queue()
-                unordered_propagated_block_processing_queue[miner.return_block_generation_time_point()] = miner.return_mined_block()
+                # add self mined block to the processing queue and sort by time
+                this_miner_mined_block = miner.return_mined_block()
+                if this_miner_mined_block:
+                    unordered_propagated_block_processing_queue[miner.return_block_generation_time_point()] = this_miner_mined_block
                 ordered_all_blocks_processing_queue = sorted(unordered_propagated_block_processing_queue.items())
                 if ordered_all_blocks_processing_queue:
                     print(f"{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} is deciding if a valid propagated block arrived before it successfully mines its own block...")
@@ -646,6 +673,7 @@ if __name__=="__main__":
                     added_blocks_miner_set.add(the_added_block.return_mined_by())
             if len(added_blocks_miner_set) > 1:
                 print("WARNING: a forking event just happened!")
+                forking_happened = True
                 # cont = input("Press any key to continue")
             else:
                 print("No forking event happened.")
@@ -672,17 +700,20 @@ if __name__=="__main__":
         for device in devices_list:
             if device.return_the_added_block() and device.online_switcher():
                 # collect usable updated params, malicious nodes identification, get rewards and do local udpates
-                device.process_block(device.return_the_added_block(), logging_files_folder_path)
-                device.other_tasks_at_the_end_of_comm_round(comm_round)
+                device.process_block(device.return_the_added_block(), log_files_folder_path, conn, conn_cursor)
+                device.other_tasks_at_the_end_of_comm_round(comm_round, log_files_folder_path)
 
         print(''' Logging Accuracies by Devices ''')
-        open(f"{logging_files_folder_path}/comm_{comm_round}.txt", 'w').close()
+        open(f"{log_files_folder_path}/comm_{comm_round}.txt", 'w').close()
         for device in devices_list:
             accuracy_this_round = device.evaluate_model_weights()
-            with open(f"{logging_files_folder_path}/comm_{comm_round}.txt", "a") as file:
+            with open(f"{log_files_folder_path}/comm_{comm_round}.txt", "a") as file:
                 is_malicious_node = "M" if device.return_is_malicious() else "B"
                 file.write(f"{device.return_idx()} {device.return_role()} {is_malicious_node}: {accuracy_this_round}\n")
-        # logging time
-        comm_round_end_time = time.time() - comm_round_start_time
-        with open(f"{logging_files_folder_path}/comm_{comm_round}.txt", "a") as file:
-            file.write(f"comm_end_time: {comm_round_end_time}\n")
+        # logging time, mining_consensus and forking
+        comm_round_spent_time = time.time() - comm_round_start_time
+        with open(f"{log_files_folder_path}/comm_{comm_round}.txt", "a") as file:
+            file.write(f"comm_spent_time: {comm_round_spent_time}\n")
+            file.write(f"mining_consensus: {mining_consensus} {args['pow_difficulty']}\n")
+            file.write(f"forking_happened: {forking_happened}")
+        conn.commit()

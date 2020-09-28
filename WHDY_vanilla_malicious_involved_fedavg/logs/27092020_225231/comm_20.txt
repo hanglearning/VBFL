@@ -1,0 +1,11 @@
+client_1 M: 0.25
+client_2 M: 0.25
+client_3 B: 0.25
+client_4 B: 0.25
+client_5 B: 0.25
+client_6 B: 0.25
+client_7 B: 0.25
+client_8 M: 0.25
+client_9 B: 0.25
+client_10 B: 0.25
+comm_spent_time: 0.38163304328918457

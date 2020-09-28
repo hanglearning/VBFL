@@ -24,8 +24,6 @@ class DatasetLoad(object):
 
 
     def mnistDataSetConstruct(self, isIID):
-        # data_dir = r'.\data\MNIST'
-        # data_dir = r'./data/MNIST'
         data_dir = 'data/MNIST'
         train_images_path = os.path.join(data_dir, 'train-images-idx3-ubyte.gz')
         train_labels_path = os.path.join(data_dir, 'train-labels-idx1-ubyte.gz')
@@ -36,10 +34,10 @@ class DatasetLoad(object):
         test_images = extract_images(test_images_path)
         test_labels = extract_labels(test_labels_path)
         # CPU reduce size
-        train_images = train_images[:110]
-        train_labels = train_labels[:110]
-        test_images = test_images[:110]
-        test_labels = test_labels[:110]
+        train_images = train_images[:154]
+        train_labels = train_labels[:154]
+        test_images = test_images[:154]
+        test_labels = test_labels[:154]
 
         assert train_images.shape[0] == train_labels.shape[0]
         assert test_images.shape[0] == test_labels.shape[0]
