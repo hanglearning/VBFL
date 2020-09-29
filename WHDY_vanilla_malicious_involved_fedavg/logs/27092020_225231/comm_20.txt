@@ -8,4 +8,4 @@ client_7 B: 0.25
 client_8 M: 0.25
 client_9 B: 0.25
 client_10 B: 0.25
-comm_spent_time: 0.38163304328918457
+comm_round_block_gen_time: 0.38163304328918457

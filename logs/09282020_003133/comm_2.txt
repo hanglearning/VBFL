@@ -12,6 +12,6 @@ device_5 miner B: 0.1783333420753479
 device_4 miner B: 0.1783333420753479
 device_13 validator B: 0.18333333730697632
 device_2 validator B: 0.18333333730697632
-comm_spent_time: 74.67010498046875
+comm_round_block_gen_time: 74.67010498046875
 mining_consensus: PoW 0
 forking_happened: True

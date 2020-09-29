@@ -203,7 +203,7 @@ if __name__=="__main__":
     # BlockFL starts here
     for comm_round in range(1, args['max_num_comm']+1):
         print(f"\nCommunication round {comm_round}")
-        comm_round_start_time = time.time()
+        # comm_round_start_time = time.time()
         # (RE)ASSIGN ROLES
         workers_to_assign = workers_needed
         miners_to_assign = miners_needed
@@ -632,6 +632,8 @@ if __name__=="__main__":
         mining_consensus = 'PoW' if args['pow_difficulty'] else 'PoS'
         mining_consensus = 'PoW'
         forking_happened = False
+        # comm_round_block_gen_time regarded as the time point when the winning miner mines its block, calculated from the beginning of the round. If there is forking in PoW or rewards info out of sync in PoS, this time is the avg time point of all the appended time by any device
+        comm_round_block_gen_time = []
         if mining_consensus == 'PoW':
             print("\nselect winning block based on PoW")
             print(''' Step 6 - miners decide if adding a propagated block or its own mined block, and request its associated devices to download this block''')
@@ -673,6 +675,7 @@ if __name__=="__main__":
                 if the_added_block:
                     print(f"{device.return_role()} {device.return_idx()} has added a block mined by {the_added_block.return_mined_by()}")
                     added_blocks_miner_set.add(the_added_block.return_mined_by())
+                    comm_round_block_gen_time.append(devices_in_network.devices_set[the_added_block.return_mined_by()].return_block_generation_time_point())
             if len(added_blocks_miner_set) > 1:
                 os.exit("WARNING: a forking event just happened!")
                 forking_happened = True
@@ -695,8 +698,10 @@ if __name__=="__main__":
                         verified_block, verification_time = device.verify_block(PoS_block, PoS_block.return_mined_by())
                         if verified_block:
                             device.add_block(verified_block)
+                            comm_round_block_gen_time.append(devices_in_network.devices_set[verified_block.return_mined_by()].return_block_generation_time_point())
                             print(f"{device.return_role()} {device.return_idx()} added a PoS block from {winning_miner.return_idx()} with stake {stake}")
                             break
+        comm_round_block_gen_time = sum(comm_round_block_gen_time)/len(comm_round_block_gen_time)
 
         print(''' Step 6 last step - process the added block - 1.collect usable updated params\n 2.malicious nodes identification\n 3.get rewards\n 4.do local udpates ''')
         for device in devices_list:
@@ -713,9 +718,9 @@ if __name__=="__main__":
                 is_malicious_node = "M" if device.return_is_malicious() else "B"
                 file.write(f"{device.return_idx()} {device.return_role()} {is_malicious_node}: {accuracy_this_round}\n")
         # logging time, mining_consensus and forking
-        comm_round_spent_time = time.time() - comm_round_start_time
+        # comm_round_spent_time = time.time() - comm_round_start_time
         with open(f"{log_files_folder_path}/comm_{comm_round}.txt", "a") as file:
-            file.write(f"comm_spent_time: {comm_round_spent_time}\n")
+            file.write(f"comm_round_block_gen_time: {comm_round_block_gen_time}\n")
             file.write(f"mining_consensus: {mining_consensus} {args['pow_difficulty']}\n")
             file.write(f"forking_happened: {forking_happened}")
         conn.commit()

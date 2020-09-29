@@ -101,5 +101,5 @@ if __name__=="__main__":
         # logging time, mining_consensus and forking
         comm_round_spent_time = time.time() - comm_round_start_time
         with open(f"{log_files_folder_path}/comm_{i}.txt", "a") as file:
-            file.write(f"comm_spent_time: {comm_round_spent_time}\n")
+            file.write(f"comm_round_block_gen_time: {comm_round_spent_time}\n")
 
