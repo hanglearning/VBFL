@@ -672,7 +672,7 @@ if __name__=="__main__":
                     print(f"{device.return_role()} {device.return_idx()} has added a block mined by {the_added_block.return_mined_by()}")
                     added_blocks_miner_set.add(the_added_block.return_mined_by())
             if len(added_blocks_miner_set) > 1:
-                print("WARNING: a forking event just happened!")
+                os.exit("WARNING: a forking event just happened!")
                 forking_happened = True
                 # cont = input("Press any key to continue")
             else:

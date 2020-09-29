@@ -34,10 +34,10 @@ class GetDataSet(object):
         test_images = extract_images(test_images_path)
         test_labels = extract_labels(test_labels_path)
         # CPU reduce size
-        train_images = train_images[:110]
-        train_labels = train_labels[:110]
-        test_images = test_images[:110]
-        test_labels = test_labels[:110]
+        train_images = train_images[:50000]
+        train_labels = train_labels[:50000]
+        test_images = test_images[:50000]
+        test_labels = test_labels[:50000]
 
         assert train_images.shape[0] == train_labels.shape[0]
         assert test_images.shape[0] == test_labels.shape[0]

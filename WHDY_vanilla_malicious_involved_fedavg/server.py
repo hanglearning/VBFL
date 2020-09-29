@@ -12,7 +12,7 @@ import sys
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter, description="FedAvg")
 parser.add_argument('-g', '--gpu', type=str, default='0', help='gpu id to use(e.g. 0,1,2,3)')
-parser.add_argument('-nc', '--num_of_clients', type=int, default=10, help='numer of the clients')
+parser.add_argument('-nc', '--num_of_clients', type=int, default=100, help='numer of the clients')
 parser.add_argument('-cf', '--cfraction', type=float, default=1, help='C fraction, 0 means 1 client, 1 means total clients')
 parser.add_argument('-E', '--epoch', type=int, default=5, help='local train epoch')
 parser.add_argument('-B', '--batchsize', type=int, default=10, help='local train batch size')
