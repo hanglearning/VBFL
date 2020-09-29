@@ -43,7 +43,7 @@ for log_file in all_rounds_log_files:
             device_id_mali = f"{device_idx} {device_maliciousness}"
             accuracy = round(float(line.split(":")[-1]), 3)
             devices_accuracies_across_rounds[device_id_mali].append(accuracy)
-        if line.startswith('comm_spent_time'):
+        if line.startswith('comm_round_block_gen_time'):
             spent_time = round(float(line.split(":")[-1]), 2)
             round_time_record.append(spent_time)
         if line.startswith('forking'):
