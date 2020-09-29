@@ -63,7 +63,7 @@ parser.add_argument('-ml', '--miner_accepted_transactions_size_limit', type=floa
 parser.add_argument('-vh', '--validator_threshold', type=float, default=0.0, help="a threshold value of accuracy difference to determine malicious worker")
 
 # debug attributes
-parser.add_argument('-ha', '--hard_assign', type=str, default='*,*,*', help='hard assign number of roles in the network, order by worker, miner and validator')
+parser.add_argument('-ha', '--hard_assign', type=str, default='*,*,*', help='hard assign number of roles in the network, order by worker, validator and miner')
 parser.add_argument('-ns', '--network_stability', type=float, default=1.0, help='the odds a device is online')
 parser.add_argument('-aio', '--all_in_one', type=int, default=0, help='let all nodes be aware of each other in the network while registering')
 parser.add_argument('-els', '--even_link_speed_strength', type=int, default=1, help="This variable is used to simulate transmission delay. Default value 1 means every device is assigned to the same link speed strength -dts bytes/sec. If set to 0, link speed strength is randomly initiated between 0 and 1, meaning a device will transmit  -els*-dts bytes/sec - during experiment, one transaction is around 35k bytes.")
@@ -106,16 +106,18 @@ if __name__=="__main__":
         workers_needed = int(roles_requirement[0])
     except:
         workers_needed = 1
+
+    try:
+        validators_needed = int(roles_requirement[1])
+    except:
+        validators_needed = 1
     
     try:
-        miners_needed = int(roles_requirement[1])
+        miners_needed = int(roles_requirement[2])
     except:
         miners_needed = 1
     
-    try:
-        validators_needed = int(roles_requirement[2])
-    except:
-        validators_needed = 1
+    
 
     # 4. check arguments eligibility
 
