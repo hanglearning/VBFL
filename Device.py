@@ -10,7 +10,7 @@ import copy
 import time
 from sys import getsizeof
 # https://cryptobook.nakov.com/digital-signatures/rsa-sign-verify-examples
-from more_itertools import split_when
+# from more_itertools import split_when
 from Crypto.PublicKey import RSA
 from hashlib import sha256
 from Blockchain import Blockchain
@@ -60,9 +60,6 @@ class Device:
         self.private_key = None
         self.public_key = None
         self.generate_rsa_key()
-        # a flag to phase out this device for a certain comm round(simulation friendly)
-        # self.phased_out = False
-        # for validation purpose
         # black_list stores device index rather than the object
         self.black_list = set()
         self.knock_out_rounds = knock_out_rounds
@@ -101,25 +98,18 @@ class Device:
         self.final_candidate_transactions_queue_to_mine = {}
         self.block_generation_time_point = None
         self.unordered_propagated_block_processing_queue = {} # pure simulation queue and does not exist in real distributed system
-        # self.block_to_add = None
         ''' For validators '''
         self.validator_associated_worker_set = set()
         self.validation_rewards_this_round = 0
         self.accuracies_this_round = {}
         self.validator_associated_miner = None
-        # self.validator_acception_wait_time = validator_acception_wait_time
-        # self.validator_sig_validated_transactions_size_limit = validator_sig_validated_transactions_size_limit
-        #self.post_validation_transactions = None or []
-        #self.broadcasted_post_validation_transactions = None or []
         # when validator directly accepts workers' updates
         self.unordered_arrival_time_accepted_worker_transactions = {}
         self.validator_accepted_broadcasted_worker_transactions = None or []
         self.final_transactions_queue_to_validate = {}
         self.post_validation_transactions_queue = None or []
         self.validator_threshold = validator_threshold
-        # self.validator_size_stop = validator_size_stop
-        # self.unconfirmmed_validator_transactions = None or []
-        # self.validator_accepted_broadcasted_worker_transactions = None or []
+        
         
 
     ''' Common Methods '''
@@ -205,25 +195,11 @@ class Device:
             print(f"{self.idx} goes offline.")
         return self.on_line
 
-    # def is_back_online(self):
-    #     if self.old_status == False and self.old_status != self.on_line:
-    #         print(f"{self.idx} goes back online.")
-    #         return True
-
     def is_online(self):
         return self.on_line
 
     def return_is_malicious(self):
         return self.is_malicious
-
-    # def phase_out(self):
-    #     self.phased_out = True
-
-    # def reset_phase_out(self):
-    #     self.phased_out = True
-
-    # def is_not_phased_out(self):
-    #     return self.phased_out
 
     def return_black_list(self):
         return self.black_list
@@ -398,13 +374,6 @@ class Device:
         self.the_added_block = block_to_add
         return True
 
-    # def reset_received_block_from_miner_vars(self):
-    #     self.has_added_block = False
-    #     self.received_block_from_miner = None
-
-    # def return_has_added_block(self):
-    #     return self.has_added_block        
-    
     def return_the_added_block(self):
         return self.the_added_block
 
@@ -573,66 +542,7 @@ class Device:
                         msg = f"worker {device.return_idx()} has been regarded as a lazy worker by {self.idx} in comm_round {this_comm_round}.\n"
                         with open(f"{log_files_folder_path}/kicked_lazy_workers.txt", 'a') as file:
                             file.write(msg)
-                    
-    def operate_on_validator_block(self, passed_in_validator_block=None):
-        old_black_list = copy.copy(self.black_list)
-        if not passed_in_validator_block:
-            block_to_operate = self.return_blockchain_object().return_last_block()
-        else:
-            # use when chain resynced
-            block_to_operate = passed_in_validator_block
-        if block_to_operate.return_mined_by() in self.black_list:
-            print(f"Block miner {block_to_operate.return_mined_by()} is in {self.idx}'s black list. operate_on_validator_block terminated.")
-        if not block_to_operate.is_validator_block():
-            print(f"Block {block_to_operate.return_block_idx()} is a worker block. Skip getting validations from this block.")
-            return
-        voted_worker_accuracy_this_round = {}
-        transactions = block_to_operate.return_transactions()
-        for transaction in transactions:
-            if transaction['validator_device_idx'] in self.black_list:
-                print(f"Validator {transaction['validator_device_idx']} of this transaction is in {self.idx}'s black list. This transaction is ignored.")
-                continue
-            else:
-                print(f"Processing transaction from validator {transaction['validator_device_idx']}...")
-            accuracies_this_round = transaction['accuracies_this_round']
-            for worker_idx, worker_accuracy in accuracies_this_round.items():
-                # voting system
-                if not worker_idx in voted_worker_accuracy_this_round.keys():
-                    voted_worker_accuracy_this_round[worker_idx] = {}
-                    voted_worker_accuracy_this_round[worker_idx][worker_accuracy] = 1
-                else:
-                    if worker_accuracy in  voted_worker_accuracy_this_round[worker_idx].keys():
-                        voted_worker_accuracy_this_round[worker_idx][worker_accuracy] += 1
-                    else:
-                        voted_worker_accuracy_this_round[worker_idx][worker_accuracy] = 1
-        # recognize the accuracy recorded by most of the validators
-        for worker_idx, worker_accuracy in voted_worker_accuracy_this_round.items():
-            accuracy_recorded_by_most_validators = list({k: v for k, v in sorted(worker_accuracy.items(), key=lambda item: item[1], reverse=True)})[0]
-            if not worker_idx in self.worker_accuracy_accross_records.keys():
-                self.worker_accuracy_accross_records[worker_idx] = []
-            self.worker_accuracy_accross_records[worker_idx].append(accuracy_recorded_by_most_validators)
-        # check and add to black_list
-        for worker_idx, worker_accuracy in self.worker_accuracy_accross_records.items():            
-            if not worker_idx in self.black_list:
-                decreasing_accuracies = list(split_when(worker_accuracy, lambda x, y: y > x))
-                for decreasing_accuracie in decreasing_accuracies:
-                    if len(decreasing_accuracie) >= self.knock_out_rounds:
-                        self.black_list.add(worker_idx)
-                        print(f"{worker_idx} has been put in {self.idx}'s black list")
-                        break
-                        # add malicious devices to the black list
-        new_black_list_peers = self.black_list.difference(old_black_list)
-        print(f"validator block {block_to_operate.return_block_idx()} has been processed.")
-        if new_black_list_peers:
-            print("These peers are put into the black_list")
-            for peer in new_black_list_peers:
-                print(f"d_{peer.split('_')[-1]}", end=', ')
-            print()
-        else:
-            print("No new peers are put into the black_list")
-
-
-
+       
     def update_model_after_chain_resync(self, log_files_folder_path, conn, conn_cursor):
         # reset global params to the initial weights of the net
         self.global_parameters = copy.deepcopy(self.initial_net_parameters)
@@ -680,8 +590,6 @@ class Device:
         print(f"Worker {self.idx} is doing local_update with computation power {self.computation_power} and link speed {round(self.link_speed,3)} bytes/s")
         self.net.load_state_dict(self.global_parameters, strict=True)
         self.train_dl = DataLoader(self.train_ds, batch_size=self.local_batch_size, shuffle=True)
-        # for epoch in range(self.computation_power):
-            # print(f"epoch {epoch+1}")
         self.local_update_time = time.time()
         # local worker update by specified epochs
         # usually, if validator acception time is specified, local_epochs should be 1
@@ -695,8 +603,6 @@ class Device:
                 self.opti.step()
                 self.opti.zero_grad()
                 self.local_updates_rewards_per_transaction += rewards * (label.shape[0])
-                # self.receive_rewards(rewards)
-                # should calculate rewards only in the block. do it when block is appended
             self.local_total_epoch += 1
         # local update one epoch done
         try:
@@ -732,9 +638,6 @@ class Device:
                 evaluation_opti.zero_grad()
             return (time.time() - local_update_time)/self.computation_power, evaluation_net.state_dict()
 
-    # def return_local_update_time(self):
-    #     return self.local_update_time
-
     def set_accuracy_this_round(self, accuracy):
         self.accuracy_this_round = accuracy
 
@@ -761,17 +664,6 @@ class Device:
         self.worker_associated_miner = None
         self.local_update_time = None
         self.local_total_epoch = 0
-
-    # def associate_with_validator(self):
-    #     validators_in_peer_list = set()
-    #     for peer in self.peer_list:
-    #         if peer.return_role() == "validator":
-    #             if not peer.return_idx() in self.black_list:
-    #                 validators_in_peer_list.add(peer)
-    #     if not validators_in_peer_list:
-    #         return False
-    #     self.worker_associated_validator = random.sample(validators_in_peer_list, 1)[0]
-    #     return self.worker_associated_validator
 
     def receive_block_from_miner(self, received_block, source_miner):
         if not (received_block.return_mined_by() in self.black_list or source_miner in self.black_list):
@@ -803,44 +695,6 @@ class Device:
                 num += 1
             return sum_accu / num
 
-    # def global_update(self, passed_in_block_to_operate=None):
-    #     if not passed_in_block_to_operate:
-    #         block_to_operate = self.return_blockchain_object().return_last_block()
-    #     else:
-    #         # use when chain resynced
-    #         block_to_operate = passed_in_block_to_operate
-    #     if block_to_operate.return_mined_by() in self.black_list:
-    #         print(f"Block miner {block_to_operate.return_mined_by()} is in {self.idx}'s black list. global_update terminated.")
-    #     if block_to_operate.is_validator_block():
-    #         print(f"Block {block_to_operate.return_block_idx()} is a validator block. Skip global model updates for this block.")
-    #         return
-    #     # avg the gradients
-    #     sum_parameters = None
-    #     # TODO verify transaction??
-    #     transactions = block_to_operate.return_transactions()
-    #     for transaction in transactions:
-    #         if transaction['worker_device_idx'] in self.black_list:
-    #             print(f"Worker {transaction['worker_device_idx']} of this transaction is in {self.idx}'s black list. This transaction is ignored.")
-    #             continue
-    #         if self.verify_transaction_by_signature(transaction, ignore_miner=True):
-    #             # print(f"The signature of the transaction from worker {transaction['worker_device_idx']} has been veified. Processing...")
-    #             print("Transaction processing...")
-    #         else:
-    #             # print(f"The signature of the transaction from worker {transaction['worker_device_idx']} is NOT veified. Ignored this transaction.")
-    #             print("Transaction ignored.")
-    #         local_updates_params = transaction['local_updates_params']
-    #         if sum_parameters is None:
-    #             sum_parameters = copy.deepcopy(local_updates_params)
-    #         else:
-    #             for var in sum_parameters:
-    #                 sum_parameters[var] += local_updates_params[var]
-    #     if not sum_parameters:
-    #         # seems all transactions are from malicious nodes
-    #         return
-    #     num_participants = len(transactions)
-    #     for var in self.global_parameters:
-    #         self.global_parameters[var] = (sum_parameters[var] / num_participants)
-    #     print(f"global updates done by block {block_to_operate.return_block_idx()}")
 
     def global_update(self, local_update_params_potentially_to_be_used):
         # filter local_params
@@ -871,14 +725,6 @@ class Device:
         
     ''' miner '''
 
-    # def add_validator_to_association(self, validator_device):
-    #     if not validator_device.return_idx() in self.black_list:
-    #         self.associated_validator_set.add(validator_device)
-    #     else:
-    #         print(f"WARNING: {validator_device.return_idx()} in miner {self.idx}'s black list. Not added by miner.")
-
-    # def return_associated_workers(self):
-    #     return self.associated_worker_set
     def request_to_download(self, block_to_download, requesting_time_point):
         print(f"miner {self.idx} is requesting its associated devices to download the block it just added to its chain")
         devices_in_association = self.miner_associated_validator_set.union(self.miner_associated_worker_set)
@@ -922,13 +768,6 @@ class Device:
     
     def return_associated_validators(self):
         return self.miner_associated_validator_set
-    
-
-    # def add_unconfirmmed_validator_transactions(self, unconfirmmed_validator_transaction):
-    #     self.unconfirmmed_validator_transactions.append(copy.deepcopy(unconfirmmed_validator_transaction))
-
-    # def return_unconfirmmed_validator_transactions(self):
-    #     return self.unconfirmmed_validator_transactions
 
     def return_miner_acception_wait_time(self):
         return self.miner_acception_wait_time
@@ -1282,24 +1121,6 @@ class Device:
 
     def return_final_transactions_validating_queue(self):
         return self.final_transactions_queue_to_validate
-    # def broadcast_post_validation_transaction(self):
-    #     for peer in self.peer_list:
-    #         if peer.is_online():
-    #             if peer.return_role() == "validator":
-    #                 if not peer.return_idx() in self.black_list:
-    #                     print(f"{self.role} {self.idx} is broadcasting signature verified transactions to {peer.return_role()} {peer.return_idx()}.")
-    #                     # in the real distributed system, it should be broadcasting transaction one by one. Here we send the entire received post-validation transactions
-    #                     peer.accept_broadcasted_post_validation_transactions(self, self.post_validation_transactions)
-    #                 else:
-    #                     print(f"Destination validator {peer.return_idx()} is in {self.role} {self.idx}'s black_list. broadcasting skipped.")
-
-    # def accept_broadcasted_post_validation_transactions(self, source_device, broadcasted_transactions):
-    #     # discard malicious node
-    #     if not source_device.return_idx() in self.black_list:
-    #         self.broadcasted_post_validation_transactions.append(copy.deepcopy(broadcasted_transactions))
-    #         print(f"{self.role} {self.idx} has accepted post-validation transactions from {source_device.return_role()} {source_device.return_idx()}")
-    #     else:
-    #         print(f"Source {source_device.return_role()} {source_device.return_idx()} is in {self.role} {self.idx}'s black list. Transaction not accepted.")
 
     # TODO validator_threshold
     def validate_worker_transaction(self, transaction_to_validate, rewards):
