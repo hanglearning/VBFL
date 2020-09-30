@@ -22,7 +22,7 @@ class client(object):
     def malicious_worker_add_noise_to_weights(self, m):
         with torch.no_grad():
             if hasattr(m, 'weight'):
-                m.weight.add_(torch.randn(m.weight.size()) * 0.1)
+                m.weight.add_(torch.randn(m.weight.size()))
 
     def localUpdate(self, localEpoch, localBatchSize, lossFun, global_parameters):
         self.net.load_state_dict(global_parameters, strict=True)

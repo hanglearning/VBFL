@@ -60,7 +60,7 @@ parser.add_argument('-pow', '--pow_difficulty', type=int, default=0, help="if se
 # blockchain FL validator/miner restriction tuning parameters
 parser.add_argument('-mt', '--miner_acception_wait_time', type=float, default=0.0, help="default time window for miners to accept transactions, in seconds. 0 means no time limit, and each device will just perform same amount(-le) of epochs per round like in FedAvg paper")
 parser.add_argument('-ml', '--miner_accepted_transactions_size_limit', type=float, default=0.0, help="no further transactions will be accepted by miner after this limit. 0 means no size limit. either this or -mt has to be specified, or both. This param determines the final block_size")
-parser.add_argument('-vh', '--validator_threshold', type=float, default=0.0, help="a threshold value of accuracy difference to determine malicious worker")
+parser.add_argument('-vh', '--validator_threshold', type=float, default=0.01, help="a threshold value of accuracy difference to determine malicious worker")
 
 # debug attributes
 parser.add_argument('-ha', '--hard_assign', type=str, default='*,*,*', help='hard assign number of roles in the network, order by worker, validator and miner')

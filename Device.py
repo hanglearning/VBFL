@@ -583,7 +583,7 @@ class Device:
     def malicious_worker_add_noise_to_weights(self, m):
         with torch.no_grad():
             if hasattr(m, 'weight'):
-                m.weight.add_(torch.randn(m.weight.size()) * 0.1)
+                m.weight.add_(torch.randn(m.weight.size()))
                 
     # TODO change to computation power
     def worker_local_update(self, rewards, local_epochs=1):

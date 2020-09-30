@@ -12,7 +12,7 @@ import sys
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter, description="FedAvg")
 parser.add_argument('-g', '--gpu', type=str, default='0', help='gpu id to use(e.g. 0,1,2,3)')
-parser.add_argument('-nc', '--num_of_clients', type=int, default=100, help='numer of the clients')
+parser.add_argument('-nc', '--num_of_clients', type=int, default=25, help='numer of the clients')
 parser.add_argument('-cf', '--cfraction', type=float, default=1, help='C fraction, 0 means 1 client, 1 means total clients')
 parser.add_argument('-E', '--epoch', type=int, default=5, help='local train epoch')
 parser.add_argument('-B', '--batchsize', type=int, default=10, help='local train batch size')
@@ -23,7 +23,7 @@ parser.add_argument('-ncomm', '--num_comm', type=int, default=1000, help='number
 parser.add_argument('-iid', '--IID', type=int, default=0, help='the way to allocate data to clients')
 
 # Hang added
-parser.add_argument('-nm', '--num_malicious', type=int, default=3, help="number of malicious nodes in the network. malicious node's data sets will be introduced Gaussian noise")
+parser.add_argument('-nm', '--num_malicious', type=int, default=0, help="number of malicious nodes in the network. malicious node's data sets will be introduced Gaussian noise")
 parser.add_argument('-st', '--shard_test_data', type=int, default=0, help='it is easy to see the global models are consistent across clients when the test dataset is NOT sharded')
 # end
 
