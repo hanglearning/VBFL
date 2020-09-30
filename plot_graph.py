@@ -58,8 +58,8 @@ for device_idx, accuracy_list in devices_accuracies_across_rounds.items():
     plt.plot(range(len(round_time_record)), accuracy_list, label=device_idx)
 
 plt.legend(loc='best')
-plt.xlabel('Comm Round with Spent Time And Forking Indicator')
+plt.xlabel('Comm Round with Block Generation Time Point And Forking Indicator')
 plt.ylabel('Accuracies Across Comm Rounds')
 plt.title('Learning Curve through Block FedAvg Comm Rounds')
-plt.savefig(f"{log_files_folder_path}/learning_curve.png")
 plt.show()
+plt.savefig(f'{log_files_folder_path}/{latest_log_folder_name}.png')
