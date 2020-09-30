@@ -54,7 +54,7 @@ round_time_record_with_forking_indicator = list(zip(round_time_record, forking_r
 
 # draw graphs over all available comm rounds
 for device_idx, accuracy_list in devices_accuracies_across_rounds.items():
-    plt.xticks(range(len(round_time_record)), round_time_record_with_forking_indicator)
+    plt.xticks(range(len(round_time_record)), round_time_record_with_forking_indicator, rotation=90)
     plt.plot(range(len(round_time_record)), accuracy_list, label=device_idx)
 
 plt.legend(loc='best')

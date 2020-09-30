@@ -48,11 +48,11 @@ for log_file in all_rounds_log_files:
 
 # draw graphs over all available comm rounds
 for device_idx, accuracy_list in devices_accuracies_across_rounds.items():
-    plt.xticks(range(len(round_time_record)), [f'r_{i}' for i in range(1, len(round_time_record) + 1)])
+    plt.xticks(range(len(round_time_record)), [i for i in range(1, len(round_time_record) + 1)], rotation=90)
     plt.plot(range(len(round_time_record)), accuracy_list, label=device_idx)
 
 plt.legend(loc='best')
-plt.xlabel('Comm Round with Spent Time')
+plt.xlabel('Comm Round')
 plt.ylabel('Accuracies Across Comm Rounds')
 plt.title('Learning Curve through Vanilla FedAvg Comm Rounds')
 plt.savefig(f"{log_files_folder_path}/learning_curve.png")
