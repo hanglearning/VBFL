@@ -10,7 +10,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/main.py",
             "console": "integratedTerminal",
-            "args": ["-nd", "20", "-B", "10", "-mn", "mnist_cnn", "-max_ncomm", "1000", "-iid", "0", "-lr", "0.01", "-g", "0", "-ns", "1", "-v", "1", "-ha", "12,5,3", "-aio", "1", "-st", "0", "-nm", "0", "-mt", "0.0", "-pow", "0"]
+            "args": ["-nd", "20", "-B", "10", "-mn", "mnist_cnn", "-max_ncomm", "1000", "-iid", "0", "-lr", "0.01", "-g", "0", "-ns", "1", "-v", "1", "-ha", "12,5,3", "-aio", "1", "-st", "0", "-nm", "0", "-mt", "0.0", "-pow", "0", "-ko", "10", "-lo", "20", "-vh", "0.2"]
         },
         {
             "name": "server.py",

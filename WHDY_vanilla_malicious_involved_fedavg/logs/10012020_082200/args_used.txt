@@ -1,0 +1,5 @@
+Command line arguments used -
+-nm 0
+
+All arguments used -
+--gpu 0 --num_of_clients 20 --cfraction 1 --epoch 5 --batchsize 10 --model_name mnist_2nn --learning_rate 0.01 --num_comm 999999 --IID 0 --num_malicious 0 --shard_test_data 0 
