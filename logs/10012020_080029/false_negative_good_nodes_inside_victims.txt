@@ -1,0 +1,7 @@
+0.08780008554458618 = current_validator_accuracy 0.2706000506877899 - accuracy_by_worker_update_using_own_data 0.18279996514320374 , by worker device_17 in round 1
+0.019999995827674866 = current_validator_accuracy 0.21289995312690735 - accuracy_by_worker_update_using_own_data 0.19289995729923248 , by worker device_4 in round 1
+0.022099927067756653 = current_validator_accuracy 0.21319986879825592 - accuracy_by_worker_update_using_own_data 0.19109994173049927 , by worker device_15 in round 1
+0.1004999503493309 = current_validator_accuracy 0.1978999674320221 - accuracy_by_worker_update_using_own_data 0.09740001708269119 , by worker device_22 in round 1
+0.06889998912811279 = current_validator_accuracy 0.3057999908924103 - accuracy_by_worker_update_using_own_data 0.23690000176429749 , by worker device_3 in round 1
+0.041100114583969116 = current_validator_accuracy 0.23690000176429749 - accuracy_by_worker_update_using_own_data 0.19579988718032837 , by worker device_20 in round 1
+0.09820011258125305 = current_validator_accuracy 0.2834000289440155 - accuracy_by_worker_update_using_own_data 0.18519991636276245 , by worker device_18 in round 1

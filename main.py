@@ -205,7 +205,7 @@ if __name__=="__main__":
     # BlockFL starts here
     for comm_round in range(1, args['max_num_comm']+1):
         print(f"\nCommunication round {comm_round}")
-        # comm_round_start_time = time.time()
+        comm_round_start_time = time.time()
         # (RE)ASSIGN ROLES
         workers_to_assign = workers_needed
         miners_to_assign = miners_needed
@@ -632,7 +632,6 @@ if __name__=="__main__":
                 print(f"{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} did not receive any transaction from validator or miner in this round.")
 
         mining_consensus = 'PoW' if args['pow_difficulty'] else 'PoS'
-        mining_consensus = 'PoW'
         forking_happened = False
         # comm_round_block_gen_time regarded as the time point when the winning miner mines its block, calculated from the beginning of the round. If there is forking in PoW or rewards info out of sync in PoS, this time is the avg time point of all the appended time by any device
         comm_round_block_gen_time = []
@@ -679,7 +678,7 @@ if __name__=="__main__":
                     added_blocks_miner_set.add(the_added_block.return_mined_by())
                     comm_round_block_gen_time.append(devices_in_network.devices_set[the_added_block.return_mined_by()].return_block_generation_time_point())
             if len(added_blocks_miner_set) > 1:
-                os.exit("WARNING: a forking event just happened!")
+                print("WARNING: a forking event just happened!")
                 forking_happened = True
                 # cont = input("Press any key to continue")
             else:
@@ -720,9 +719,10 @@ if __name__=="__main__":
                 is_malicious_node = "M" if device.return_is_malicious() else "B"
                 file.write(f"{device.return_idx()} {device.return_role()} {is_malicious_node}: {accuracy_this_round}\n")
         # logging time, mining_consensus and forking
-        # comm_round_spent_time = time.time() - comm_round_start_time
+        comm_round_spent_time = time.time() - comm_round_start_time
         with open(f"{log_files_folder_path}/comm_{comm_round}.txt", "a") as file:
             file.write(f"comm_round_block_gen_time: {comm_round_block_gen_time}\n")
             file.write(f"mining_consensus: {mining_consensus} {args['pow_difficulty']}\n")
-            file.write(f"forking_happened: {forking_happened}")
+            file.write(f"forking_happened: {forking_happened}\n")
+            file.write(f"comm_round_spent_time_on_this_machine: {comm_round_spent_time}")
         conn.commit()

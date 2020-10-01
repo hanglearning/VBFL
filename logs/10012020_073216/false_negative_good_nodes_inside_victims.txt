@@ -1,0 +1,2 @@
+0.09940005838871002 = current_validator_accuracy 0.2981000244617462 - accuracy_by_worker_update_using_own_data 0.1986999660730362 , by worker device_27 in round 1
+0.09180007874965668 = current_validator_accuracy 0.28940004110336304 - accuracy_by_worker_update_using_own_data 0.19759996235370636 , by worker device_23 in round 1
