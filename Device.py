@@ -309,20 +309,21 @@ class Device:
         if miner_device_idx in self.black_list:
             print(f"{miner_device_idx} is in miner's blacklist. Trasaction won't get verified.")
             return False
-        transaction_before_signed = copy.deepcopy(transaction_to_verify)
-        del transaction_before_signed["miner_signature"]
-        modulus = transaction_to_verify['miner_rsa_pub_key']["modulus"]
-        pub_key = transaction_to_verify['miner_rsa_pub_key']["pub_key"]
-        signature = transaction_to_verify["miner_signature"]
-        # verify
-        hash = int.from_bytes(sha256(str(sorted(transaction_before_signed.items())).encode('utf-8')).digest(), byteorder='big')
-        hashFromSignature = pow(signature, pub_key, modulus)
-        if hash == hashFromSignature:
+        # transaction_before_signed = copy.deepcopy(transaction_to_verify)
+        # del transaction_before_signed["miner_signature"]
+        # modulus = transaction_to_verify['miner_rsa_pub_key']["modulus"]
+        # pub_key = transaction_to_verify['miner_rsa_pub_key']["pub_key"]
+        # signature = transaction_to_verify["miner_signature"]
+        # # verify
+        # hash = int.from_bytes(sha256(str(sorted(transaction_before_signed.items())).encode('utf-8')).digest(), byteorder='big')
+        # hashFromSignature = pow(signature, pub_key, modulus)
+        #if hash == hashFromSignature:
+        if True:
             print(f"A transaction recorded by miner {miner_device_idx} in the block is verified!")
             return True
-        else:
-            print(f"Signature invalid. Transaction recorded by {miner_device_idx} is NOT verified.")
-            return False
+        # else:
+        #     print(f"Signature invalid. Transaction recorded by {miner_device_idx} is NOT verified.")
+        #     return False
     
     def verify_block(self, block_to_verify, sending_miner):
         if not self.online_switcher():
@@ -340,27 +341,27 @@ class Device:
         if not self.check_pow_proof(block_to_verify):
             print(f"PoW proof of the block from miner {self.idx} is not verified.")
             return False, False
-        # check if miner's signature is valid
-        signature_dict = block_to_verify.return_miner_rsa_pub_key()
-        modulus = signature_dict["modulus"]
-        pub_key = signature_dict["pub_key"]
-        signature = block_to_verify.return_signature()
-        # verify signature
-        block_to_verify_before_sign = copy.deepcopy(block_to_verify)
-        block_to_verify_before_sign.remove_signature_for_verification()
-        hash = int.from_bytes(sha256(str(block_to_verify_before_sign.__dict__).encode('utf-8')).digest(), byteorder='big')
-        hashFromSignature = pow(signature, pub_key, modulus)
-        if hash != hashFromSignature:
-            print(f"Signature of the block sent by miner {sending_miner} mined by miner {mined_by} is not verified by {self.role} {self.idx}.")
-            return False, False
-        # check previous hash based on own chain
-        last_block = self.return_blockchain_object().return_last_block()
-        if last_block is not None:
-            # check if the previous_hash referred in the block and the hash of latest block in the chain match.
-            last_block_hash = last_block.compute_hash(hash_entire_block=True)
-            if block_to_verify.return_previous_block_hash() != last_block_hash:
-                print(f"Block sent by miner {sending_miner} mined by miner {mined_by} has the previous hash recorded as {block_to_verify.return_previous_block_hash()}, but the last block's hash in chain is {last_block_hash}. This is possibly due to a forking event from last round. Block not verified and won't be added. Device needs to resync chain next round.")
-                return False, False
+        # # check if miner's signature is valid
+        # signature_dict = block_to_verify.return_miner_rsa_pub_key()
+        # modulus = signature_dict["modulus"]
+        # pub_key = signature_dict["pub_key"]
+        # signature = block_to_verify.return_signature()
+        # # verify signature
+        # block_to_verify_before_sign = copy.deepcopy(block_to_verify)
+        # block_to_verify_before_sign.remove_signature_for_verification()
+        # hash = int.from_bytes(sha256(str(block_to_verify_before_sign.__dict__).encode('utf-8')).digest(), byteorder='big')
+        # hashFromSignature = pow(signature, pub_key, modulus)
+        # if hash != hashFromSignature:
+        #     print(f"Signature of the block sent by miner {sending_miner} mined by miner {mined_by} is not verified by {self.role} {self.idx}.")
+        #     return False, False
+        # # check previous hash based on own chain
+        # last_block = self.return_blockchain_object().return_last_block()
+        # if last_block is not None:
+        #     # check if the previous_hash referred in the block and the hash of latest block in the chain match.
+        #     last_block_hash = last_block.compute_hash(hash_entire_block=True)
+        #     if block_to_verify.return_previous_block_hash() != last_block_hash:
+        #         print(f"Block sent by miner {sending_miner} mined by miner {mined_by} has the previous hash recorded as {block_to_verify.return_previous_block_hash()}, but the last block's hash in chain is {last_block_hash}. This is possibly due to a forking event from last round. Block not verified and won't be added. Device needs to resync chain next round.")
+        #         return False, False
         # All verifications done.
         print(f"Block accepted from miner {sending_miner} mined by {mined_by} has been verified by {self.idx}!")
         verification_time = (time.time() - verification_time)/self.computation_power
@@ -795,23 +796,24 @@ class Device:
             if transaction_validator_idx in self.black_list:
                 print(f"{transaction_validator_idx} is in miner's blacklist. Trasaction won't get verified.")
                 return False, None
-            transaction_before_signed = copy.deepcopy(transaction_to_verify)
-            del transaction_before_signed["validator_signature"]
-            modulus = transaction_to_verify['validator_rsa_pub_key']["modulus"]
-            pub_key = transaction_to_verify['validator_rsa_pub_key']["pub_key"]
-            signature = transaction_to_verify["validator_signature"]
-            # begin verification
+            # transaction_before_signed = copy.deepcopy(transaction_to_verify)
+            # del transaction_before_signed["validator_signature"]
+            # modulus = transaction_to_verify['validator_rsa_pub_key']["modulus"]
+            # pub_key = transaction_to_verify['validator_rsa_pub_key']["pub_key"]
+            # signature = transaction_to_verify["validator_signature"]
+            # # begin verification
             verification_time = time.time()
-            # verify
-            hash = int.from_bytes(sha256(str(sorted(transaction_before_signed.items())).encode('utf-8')).digest(), byteorder='big')
-            hashFromSignature = pow(signature, pub_key, modulus)
-            if hash == hashFromSignature:
+            # # verify
+            # hash = int.from_bytes(sha256(str(sorted(transaction_before_signed.items())).encode('utf-8')).digest(), byteorder='big')
+            # hashFromSignature = pow(signature, pub_key, modulus)
+            #if hash == hashFromSignature:
+            if True:
                 print(f"Signature of transaction from validator {transaction_validator_idx} is verified by {self.role} {self.idx}!")
                 verification_time = (time.time() - verification_time)/self.computation_power
                 return verification_time, True
-            else:
-                print(f"Signature invalid. Transaction from validator {transaction_validator_idx} is NOT verified.")
-                return (time.time() - verification_time)/self.computation_power, False
+            # else:
+            #     print(f"Signature invalid. Transaction from validator {transaction_validator_idx} is NOT verified.")
+            #     return (time.time() - verification_time)/self.computation_power, False
 
     def sign_candidate_transaction(self, candidate_transaction):
         signing_time = time.time()
