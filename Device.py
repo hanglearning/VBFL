@@ -816,6 +816,8 @@ class Device:
     def sign_candidate_transaction(self, candidate_transaction):
         signing_time = time.time()
         candidate_transaction['miner_rsa_pub_key'] = self.return_rsa_pub_key()
+        if 'miner_signature' in candidate_transaction.keys():
+            del candidate_transaction['miner_signature']
         candidate_transaction["miner_signature"] = self.sign_msg(sorted(candidate_transaction.items()))
         signing_time = (time.time() - signing_time)/self.computation_power
         return signing_time
@@ -1123,7 +1125,7 @@ class Device:
         return self.final_transactions_queue_to_validate
 
     # TODO validator_threshold
-    def validate_worker_transaction(self, transaction_to_validate, rewards):
+    def validate_worker_transaction(self, transaction_to_validate, rewards, log_files_folder_path, comm_round):
         if self.computation_power == 0:
             print(f"validator {self.idx} has computation power 0 and will not be able to validate this transaction in time")
             return False, False
@@ -1160,10 +1162,22 @@ class Device:
                 print(f"After applying worker's update, model accuracy becomes - {accuracy_by_worker_update_using_own_data}")
                 if accuracy_by_worker_update_using_own_data - current_accuracy < self.validator_threshold * -1:
                     transaction_to_validate['update_direction'] = False
-                    print(f"NOTE: worker {worker_transaction_device_idx}'s' updates is deemed as suspiciously malicious by validator {self.idx}")
+                    print(f"NOTE: worker {worker_transaction_device_idx}'s updates is deemed as suspiciously malicious by validator {self.idx}")
+                    # is it right?
+                    if not self.devices_dict[worker_transaction_device_idx].return_is_malicious():
+                        print(f"Warning - {worker_transaction_device_idx} is benign and this validation is wrong.")
+                        # for experiments
+                        with open(f"{log_files_folder_path}/false_negative_good_nodes_inside_victims.txt", 'a') as file:
+                            file.write(f"{current_accuracy - accuracy_by_worker_update_using_own_data} = current_validator_accuracy {current_accuracy} - accuracy_by_worker_update_using_own_data {accuracy_by_worker_update_using_own_data} , by worker {worker_transaction_device_idx} in round {comm_round}\n")
                 else:
                     transaction_to_validate['update_direction'] = True
                     print(f"worker {worker_transaction_device_idx}'s' updates is deemed as GOOD by validator {self.idx}")
+                    # is it right?
+                    if self.devices_dict[worker_transaction_device_idx].return_is_malicious():
+                        print(f"Warning - {worker_transaction_device_idx} is malicious and this validation is wrong.")
+                        # for experiments
+                        with open(f"{log_files_folder_path}/false_positive_malious_nodes_inside_slipped.txt", 'a') as file:
+                            file.write(f"{current_accuracy - accuracy_by_worker_update_using_own_data} = current_validator_accuracy {current_accuracy} - accuracy_by_worker_update_using_own_data {accuracy_by_worker_update_using_own_data} , by worker {worker_transaction_device_idx} in round {comm_round}\n")
             else:
                 transaction_to_validate['update_direction'] = 'N/A'
             transaction_to_validate['validation_done_by'] = self.idx
@@ -1174,7 +1188,6 @@ class Device:
             # assume signing done in negligible time
             transaction_to_validate["validator_signature"] = self.sign_msg(sorted(transaction_to_validate.items()))
             return validation_time, transaction_to_validate
-
 
 class DevicesInNetwork(object):
     def __init__(self, data_set_name, is_iid, batch_size, learning_rate, loss_func, opti, num_devices, network_stability, net, dev, knock_out_rounds, lazy_worker_knock_out_rounds, shard_test_data, miner_acception_wait_time, miner_accepted_transactions_size_limit, validator_threshold, pow_difficulty, even_link_speed_strength, base_data_transmission_speed, even_computation_power, num_malicious):

@@ -180,6 +180,8 @@ if __name__=="__main__":
     # create log files
     open(f"{log_files_folder_path}/correctly_kicked_workers.txt", 'w').close()
     open(f"{log_files_folder_path}/mistakenly_kicked_workers.txt", 'w').close()
+    open(f"{log_files_folder_path}/false_positive_malious_nodes_inside_slipped.txt", 'w').close()
+    open(f"{log_files_folder_path}/false_negative_good_nodes_inside_victims.txt", 'w').close()
     # open(f"{log_files_folder_path}/correctly_kicked_validators.txt", 'w').close()
     # open(f"{log_files_folder_path}/mistakenly_kicked_validators.txt", 'w').close()
     open(f"{log_files_folder_path}/kicked_lazy_workers.txt", 'w').close()
@@ -454,7 +456,7 @@ if __name__=="__main__":
                 print(f"{validator.return_idx()} - validator {validator_iter+1}/{len(validators_this_round)} is validating received worker transactions...")
                 for (arrival_time, unconfirmmed_transaction) in final_transactions_arrival_queue:
                     if validator.online_switcher():
-                        validation_time, post_validation_unconfirmmed_transaction = validator.validate_worker_transaction(unconfirmmed_transaction, rewards)
+                        validation_time, post_validation_unconfirmmed_transaction = validator.validate_worker_transaction(unconfirmmed_transaction, rewards, log_files_folder_path, comm_round)
                         if validation_time:
                             validator.add_post_validation_transaction_to_queue((arrival_time + validation_time, validator.return_link_speed(), post_validation_unconfirmmed_transaction))
                             print(f"A validation process has been done for the transaction from worker {post_validation_unconfirmmed_transaction['worker_device_idx']} by validator {validator.return_idx()}")
