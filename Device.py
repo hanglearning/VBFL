@@ -16,7 +16,7 @@ from hashlib import sha256
 from Blockchain import Blockchain
 
 class Device:
-    def __init__(self, idx, assigned_train_ds, assigned_test_dl, local_batch_size, learning_rate, loss_func, opti, network_stability, net, dev, miner_acception_wait_time, miner_accepted_transactions_size_limit, validator_threshold, pow_difficulty, even_link_speed_strength, base_data_transmission_speed, even_computation_power, is_malicious, knock_out_rounds, lazy_worker_knock_out_rounds):
+    def __init__(self, idx, assigned_train_ds, assigned_test_dl, local_batch_size, learning_rate, loss_func, opti, network_stability, net, dev, miner_acception_wait_time, miner_accepted_transactions_size_limit, validator_threshold, pow_difficulty, even_link_speed_strength, base_data_transmission_speed, even_computation_power, is_malicious, malicious_updates_discount, knock_out_rounds, lazy_worker_knock_out_rounds):
         self.idx = idx
         self.train_ds = assigned_train_ds
         self.test_dl = assigned_test_dl
@@ -40,6 +40,7 @@ class Device:
             self.link_speed = random.random() * base_data_transmission_speed
         self.devices_dict = None
         self.aio = False
+        self.malicious_updates_discount = malicious_updates_discount
         ''' simulating hardware equipment strength, such as good processors and RAM capacity. Following recorded times will be shrunk by this value of times
         # for workers, its update time
         # for miners, its PoW time
@@ -405,6 +406,7 @@ class Device:
                             valid_transactions_records_by_worker[worker_device_idx] = {}
                             valid_transactions_records_by_worker[worker_device_idx]['positive_epochs'] = set()
                             valid_transactions_records_by_worker[worker_device_idx]['negative_epochs'] = set()
+                            valid_transactions_records_by_worker[worker_device_idx]['all_valid_epochs'] = set()
                             valid_transactions_records_by_worker[worker_device_idx]['finally_used_params'] = None
                         # epoch of this worker's local update
                         local_epoch_seq = valid_validator_sig_worker_transaciton['local_total_accumulated_epochs_this_round']
@@ -413,16 +415,27 @@ class Device:
                         if len(positive_direction_validators) > len(negative_direction_validators):
                             # worker transaction can be used
                             valid_transactions_records_by_worker[worker_device_idx]['positive_epochs'].add(local_epoch_seq)
+                            valid_transactions_records_by_worker[worker_device_idx]['all_valid_epochs'].add(local_epoch_seq)
                             # see if this is the latest epoch from this worker
-                            if local_epoch_seq == max(valid_transactions_records_by_worker[worker_device_idx]['positive_epochs']):
+                            if local_epoch_seq == max(valid_transactions_records_by_worker[worker_device_idx]['all_valid_epochs']):
                                 valid_transactions_records_by_worker[worker_device_idx]['finally_used_params'] = valid_validator_sig_worker_transaciton['local_updates_params']
                             # give rewards to this worker
                             if self.idx == worker_device_idx:
                                 self_rewards_accumulator += valid_validator_sig_worker_transaciton['local_updates_rewards']
                         else:
-                            # worker transaction voted negative and can not be used
+                            # worker transaction voted negative and has to be applied for a discount
                             valid_transactions_records_by_worker[worker_device_idx]['negative_epochs'].add(local_epoch_seq)
-                            # worker does not receive rewards for negative update
+                            valid_transactions_records_by_worker[worker_device_idx]['all_valid_epochs'].add(local_epoch_seq)
+                            # see if this is the latest epoch from this worker
+                            if local_epoch_seq == max(valid_transactions_records_by_worker[worker_device_idx]['all_valid_epochs']):
+                                # apply discount
+                                discounted_valid_validator_sig_worker_transaciton_local_updates_params = copy.deepcopy(valid_validator_sig_worker_transaciton['local_updates_params'])
+                                for var in discounted_valid_validator_sig_worker_transaciton_local_updates_params:
+                                    discounted_valid_validator_sig_worker_transaciton_local_updates_params[var] *= self.malicious_updates_discount
+                                valid_transactions_records_by_worker[worker_device_idx]['finally_used_params'] = discounted_valid_validator_sig_worker_transaciton_local_updates_params
+                            # worker receive discounted rewards for negative update
+                            if self.idx == worker_device_idx:
+                                self_rewards_accumulator += valid_validator_sig_worker_transaciton['local_updates_rewards'] * self.malicious_updates_discount
                         # give rewards to validators and the miner in this transaction
                         for validator_record in positive_direction_validators + negative_direction_validators:
                             if self.idx == validator_record['validator']:
@@ -1192,7 +1205,7 @@ class Device:
             return validation_time, transaction_to_validate
 
 class DevicesInNetwork(object):
-    def __init__(self, data_set_name, is_iid, batch_size, learning_rate, loss_func, opti, num_devices, network_stability, net, dev, knock_out_rounds, lazy_worker_knock_out_rounds, shard_test_data, miner_acception_wait_time, miner_accepted_transactions_size_limit, validator_threshold, pow_difficulty, even_link_speed_strength, base_data_transmission_speed, even_computation_power, num_malicious):
+    def __init__(self, data_set_name, is_iid, batch_size, learning_rate, loss_func, opti, num_devices, network_stability, net, dev, knock_out_rounds, lazy_worker_knock_out_rounds, shard_test_data, miner_acception_wait_time, miner_accepted_transactions_size_limit, validator_threshold, pow_difficulty, even_link_speed_strength, base_data_transmission_speed, even_computation_power, malicious_updates_discount, num_malicious):
         self.data_set_name = data_set_name
         self.is_iid = is_iid
         self.batch_size = batch_size
@@ -1212,6 +1225,7 @@ class DevicesInNetwork(object):
         self.base_data_transmission_speed = base_data_transmission_speed
         self.even_computation_power = even_computation_power
         self.num_malicious = num_malicious
+        self.malicious_updates_discount = malicious_updates_discount
         # distribute dataset
         ''' validator '''
         self.validator_threshold = validator_threshold
@@ -1280,7 +1294,7 @@ class DevicesInNetwork(object):
                 # add Gussian Noise
 
             device_idx = f'device_{i+1}'
-            a_device = Device(device_idx, TensorDataset(torch.tensor(local_train_data), torch.tensor(local_train_label)), test_data_loader, self.batch_size, self.learning_rate, self.loss_func, self.opti, self.default_network_stability, self.net, self.dev, self.miner_acception_wait_time, self.miner_accepted_transactions_size_limit, self.validator_threshold, self.pow_difficulty, self.even_link_speed_strength, self.base_data_transmission_speed, self.even_computation_power, is_malicious, self.knock_out_rounds, self.lazy_worker_knock_out_rounds)
+            a_device = Device(device_idx, TensorDataset(torch.tensor(local_train_data), torch.tensor(local_train_label)), test_data_loader, self.batch_size, self.learning_rate, self.loss_func, self.opti, self.default_network_stability, self.net, self.dev, self.miner_acception_wait_time, self.miner_accepted_transactions_size_limit, self.validator_threshold, self.pow_difficulty, self.even_link_speed_strength, self.base_data_transmission_speed, self.even_computation_power, is_malicious, self.malicious_updates_discount, self.knock_out_rounds, self.lazy_worker_knock_out_rounds)
             # device index starts from 1
             self.devices_set[device_idx] = a_device
             print(f"Sharding dataset to {device_idx} done.")

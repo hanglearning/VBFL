@@ -61,6 +61,7 @@ parser.add_argument('-pow', '--pow_difficulty', type=int, default=0, help="if se
 parser.add_argument('-mt', '--miner_acception_wait_time', type=float, default=0.0, help="default time window for miners to accept transactions, in seconds. 0 means no time limit, and each device will just perform same amount(-le) of epochs per round like in FedAvg paper")
 parser.add_argument('-ml', '--miner_accepted_transactions_size_limit', type=float, default=0.0, help="no further transactions will be accepted by miner after this limit. 0 means no size limit. either this or -mt has to be specified, or both. This param determines the final block_size")
 parser.add_argument('-vh', '--validator_threshold', type=float, default=0.01, help="a threshold value of accuracy difference to determine malicious worker")
+parser.add_argument('-md', '--malicious_updates_discount', type=float, default=0.5, help="do not entirely drop the voted negative worker transaction because that risks the same worker dropping the entire transactions and repeat its accuracy again and again and will be kicked out. Apply a discount factor instead to the false negative worker's updates are by some rate applied so it won't repeat")
 
 # debug attributes
 parser.add_argument('-ha', '--hard_assign', type=str, default='*,*,*', help='hard assign number of roles in the network, order by worker, validator and miner')
@@ -156,7 +157,7 @@ if __name__=="__main__":
     loss_func = F.cross_entropy
 
     # 7. create devices in the network
-    devices_in_network = DevicesInNetwork(data_set_name='mnist', is_iid=args['IID'], batch_size = args['batchsize'], learning_rate =  args['learning_rate'], loss_func = loss_func, opti = args['optimizer'], num_devices=num_devices, network_stability=args['network_stability'], net=net, dev=dev, knock_out_rounds=args['knock_out_rounds'], lazy_worker_knock_out_rounds=args['lazy_worker_knock_out_rounds'], shard_test_data=args['shard_test_data'], miner_acception_wait_time=args['miner_acception_wait_time'], miner_accepted_transactions_size_limit=args['miner_accepted_transactions_size_limit'], validator_threshold=args['validator_threshold'], pow_difficulty=args['pow_difficulty'], even_link_speed_strength=args['even_link_speed_strength'], base_data_transmission_speed=args['base_data_transmission_speed'], even_computation_power=args['even_computation_power'], num_malicious=num_malicious)
+    devices_in_network = DevicesInNetwork(data_set_name='mnist', is_iid=args['IID'], batch_size = args['batchsize'], learning_rate =  args['learning_rate'], loss_func = loss_func, opti = args['optimizer'], num_devices=num_devices, network_stability=args['network_stability'], net=net, dev=dev, knock_out_rounds=args['knock_out_rounds'], lazy_worker_knock_out_rounds=args['lazy_worker_knock_out_rounds'], shard_test_data=args['shard_test_data'], miner_acception_wait_time=args['miner_acception_wait_time'], miner_accepted_transactions_size_limit=args['miner_accepted_transactions_size_limit'], validator_threshold=args['validator_threshold'], pow_difficulty=args['pow_difficulty'], even_link_speed_strength=args['even_link_speed_strength'], base_data_transmission_speed=args['base_data_transmission_speed'], even_computation_power=args['even_computation_power'], malicious_updates_discount=args['malicious_updates_discount'], num_malicious=num_malicious)
     devices_list = list(devices_in_network.devices_set.values())
 
     # 8. register devices and initialize global parameterms
@@ -393,26 +394,25 @@ if __name__=="__main__":
                                     total_time_tracker = total_time_tracker - records_dict[worker][update_iter - 1]['transmission_delay'] + wasted_update_time + wasted_transmission_delay
                             update_iter += 1
             else:
-                # did not specify wait time. every associated worker perform specified number of local epochs
+                 # did not specify wait time. every associated worker perform specified number of local epochs
                 for worker_iter in range(len(associated_workers)):
-                    worker =associated_workers[worker_iter]
+                    worker = associated_workers[worker_iter]
                     if not worker.return_idx() in validator.return_black_list():
                         print(f'worker {worker_iter+1}/{len(associated_workers)} of validator {validator.return_idx()} is doing local updates')     
-                        worker_link_speed = worker.return_link_speed()
-                        lower_link_speed = validator_link_speed if validator_link_speed < worker_link_speed else worker_link_speed
-                        for epoch in range(args['default_local_epochs']):
-                            if worker.online_switcher():
-                                local_update_spent_time = worker.worker_local_update(rewards)
-                                unverified_transaction = worker.return_local_updates_and_signature(comm_round)
-                                unverified_transactions_size = getsizeof(str(unverified_transaction))
-                                transmission_delay = unverified_transactions_size/lower_link_speed
-                                if validator.online_switcher():
-                                    transaction_arrival_queue[local_update_spent_time + transmission_delay] = unverified_transaction
-                                    print(f"validator {validator.return_idx()} has accepted a transaction from woker {worker.return_idx()}.")
-                                else:
-                                    print(f"validator {validator.return_idx()} offline and unable to accept this transaction")
+                        if worker.online_switcher():
+                            local_update_spent_time = worker.worker_local_update(rewards, local_epochs=args['default_local_epochs'])
+                            worker_link_speed = worker.return_link_speed()
+                            lower_link_speed = validator_link_speed if validator_link_speed < worker_link_speed else worker_link_speed
+                            unverified_transaction = worker.return_local_updates_and_signature(comm_round)
+                            unverified_transactions_size = getsizeof(str(unverified_transaction))
+                            transmission_delay = unverified_transactions_size/lower_link_speed
+                            if validator.online_switcher():
+                                transaction_arrival_queue[local_update_spent_time + transmission_delay] = unverified_transaction
+                                print(f"validator {validator.return_idx()} has accepted this transaction.")
                             else:
-                                print(f"worker {worker.return_idx()} offline and unable do local updates")
+                                print(f"validator {validator.return_idx()} offline and unable to accept this transaction")
+                        else:
+                            print(f"worker {worker.return_idx()} offline and unable do local updates")
                     else:
                         print(f"worker {worker.return_idx()} in validator {validator.return_idx()}'s black list. This worker's transactions won't be accpeted.")
             validator.set_unordered_arrival_time_accepted_worker_transactions(transaction_arrival_queue)
