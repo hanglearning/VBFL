@@ -370,7 +370,7 @@ if __name__=="__main__":
                                 else:
                                     total_time_tracker = total_time_tracker - records_dict[worker][update_iter - 1]['transmission_delay'] + local_update_spent_time + transmission_delay
                                 records_dict[worker][update_iter]['arrival_time'] = total_time_tracker
-                                if validators.online_switcher():
+                                if validator.online_switcher():
                                     # accept this transaction only if the validator is online
                                     print(f"validator {validator.return_idx()} has accepted this transaction.")
                                     transaction_arrival_queue[total_time_tracker] = unverified_transaction
@@ -398,20 +398,21 @@ if __name__=="__main__":
                     worker =associated_workers[worker_iter]
                     if not worker.return_idx() in validator.return_black_list():
                         print(f'worker {worker_iter+1}/{len(associated_workers)} of validator {validator.return_idx()} is doing local updates')     
-                        if worker.online_switcher():
-                            local_update_spent_time = worker.worker_local_update(rewards, local_epochs=args['default_local_epochs'])
-                            worker_link_speed = worker.return_link_speed()
-                            lower_link_speed = validator_link_speed if validator_link_speed < worker_link_speed else worker_link_speed
-                            unverified_transaction = worker.return_local_updates_and_signature(comm_round)
-                            unverified_transactions_size = getsizeof(str(unverified_transaction))
-                            transmission_delay = unverified_transactions_size/lower_link_speed
-                            if validator.online_switcher():
-                                transaction_arrival_queue[local_update_spent_time + transmission_delay] = unverified_transaction
-                                print(f"validator {validator.return_idx()} has accepted this transaction.")
+                        worker_link_speed = worker.return_link_speed()
+                        lower_link_speed = validator_link_speed if validator_link_speed < worker_link_speed else worker_link_speed
+                        for epoch in range(args['default_local_epochs']):
+                            if worker.online_switcher():
+                                local_update_spent_time = worker.worker_local_update(rewards)
+                                unverified_transaction = worker.return_local_updates_and_signature(comm_round)
+                                unverified_transactions_size = getsizeof(str(unverified_transaction))
+                                transmission_delay = unverified_transactions_size/lower_link_speed
+                                if validator.online_switcher():
+                                    transaction_arrival_queue[local_update_spent_time + transmission_delay] = unverified_transaction
+                                    print(f"validator {validator.return_idx()} has accepted a transaction from woker {worker.return_idx()}.")
+                                else:
+                                    print(f"validator {validator.return_idx()} offline and unable to accept this transaction")
                             else:
-                                print(f"validator {validator.return_idx()} offline and unable to accept this transaction")
-                        else:
-                            print(f"worker {worker.return_idx()} offline and unable do local updates")
+                                print(f"worker {worker.return_idx()} offline and unable do local updates")
                     else:
                         print(f"worker {worker.return_idx()} in validator {validator.return_idx()}'s black list. This worker's transactions won't be accpeted.")
             validator.set_unordered_arrival_time_accepted_worker_transactions(transaction_arrival_queue)
@@ -430,9 +431,9 @@ if __name__=="__main__":
             validator = validators_this_round[validator_iter]
             accepted_broadcasted_validator_transactions = validator.return_accepted_broadcasted_worker_transactions()
             print(f"{validator.return_idx()} - validator {validator_iter+1}/{len(validators_this_round)} is calculating the final transactions arrival order by combining the direct worker transactions received and received broadcasted transactions...")
+            accepted_broadcasted_transactions_arrival_queue = {}
             if accepted_broadcasted_validator_transactions:
                 # calculate broadcasted transactions arrival time
-                accepted_broadcasted_transactions_arrival_queue = {}
                 self_validator_link_speed = validator.return_link_speed()
                 for broadcasting_validator_record in accepted_broadcasted_validator_transactions:
                     broadcasting_validator_link_speed = broadcasting_validator_record['source_validator_link_speed']
@@ -702,7 +703,14 @@ if __name__=="__main__":
                             comm_round_block_gen_time.append(devices_in_network.devices_set[verified_block.return_mined_by()].return_block_generation_time_point())
                             print(f"{device.return_role()} {device.return_idx()} added a PoS block from {winning_miner.return_idx()} with stake {stake}")
                             break
-        comm_round_block_gen_time = sum(comm_round_block_gen_time)/len(comm_round_block_gen_time)
+        try:
+            comm_round_block_gen_time = sum(comm_round_block_gen_time)/len(comm_round_block_gen_time)
+        except:
+            no_block_msg = "No block has been generated this round."
+            print(no_block_msg)
+            with open(f"{log_files_folder_path}/comm_{comm_round}.txt", "a") as file:
+                file.write(no_block_msg)
+            continue
 
         print(''' Step 6 last step - process the added block - 1.collect usable updated params\n 2.malicious nodes identification\n 3.get rewards\n 4.do local udpates ''')
         for device in devices_list:
