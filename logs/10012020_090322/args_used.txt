@@ -1,5 +1,0 @@
-Command line arguments used -
--nd 20 -B 10 -mn mnist_cnn -max_ncomm 1000 -iid 0 -lr 0.01 -g 0 -ns 1 -v 1 -ha 12,5,3 -aio 1 -st 0 -nm 0 -mt 0.0 -pow 0 -ko 10 -lo 20 -vh 0.2
-
-All arguments used -
---gpu 0 --verbose 1 --batchsize 10 --model_name mnist_cnn --learning_rate 0.01 --optimizer SGD --IID 0 --max_num_comm 1000 --num_devices 20 --shard_test_data 0 --num_malicious 0 --default_local_epochs 5 --general_rewards 1 --knock_out_rounds 10 --lazy_worker_knock_out_rounds 20 --pow_difficulty 0 --miner_acception_wait_time 0.0 --miner_accepted_transactions_size_limit 0.0 --validator_threshold 0.2 --hard_assign 12,5,3 --network_stability 1.0 --all_in_one 1 --even_link_speed_strength 1 --base_data_transmission_speed 70000.0 --even_computation_power 1 

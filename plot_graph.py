@@ -53,9 +53,16 @@ for log_file in all_rounds_log_files:
 round_time_record_with_forking_indicator = list(zip(round_time_record, forking_record))
 
 # draw graphs over all available comm rounds
+annotating_accuracy_list = []
 for device_idx, accuracy_list in devices_accuracies_across_rounds.items():
     plt.xticks(range(len(round_time_record)), round_time_record_with_forking_indicator, rotation=90)
     plt.plot(range(len(round_time_record)), accuracy_list, label=device_idx)
+    annotating_accuracy_list = accuracy_list
+# annotate graph
+annotating_points = 20
+for accuracy_iter in range(len(annotating_accuracy_list)):
+    if not accuracy_iter % (len(annotating_accuracy_list) // annotating_points):
+        plt.annotate(annotating_accuracy_list[accuracy_iter], xy=(accuracy_iter, annotating_accuracy_list[accuracy_iter]), size=8)
 
 plt.legend(loc='best')
 plt.xlabel('Comm Round with Block Generation Time Point And Forking Indicator')
