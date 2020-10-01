@@ -1281,3 +1281,5 @@ class DevicesInNetwork(object):
             a_device = Device(device_idx, TensorDataset(torch.tensor(local_train_data), torch.tensor(local_train_label)), test_data_loader, self.batch_size, self.learning_rate, self.loss_func, self.opti, self.default_network_stability, self.net, self.dev, self.miner_acception_wait_time, self.miner_accepted_transactions_size_limit, self.validator_threshold, self.pow_difficulty, self.even_link_speed_strength, self.base_data_transmission_speed, self.even_computation_power, is_malicious, self.knock_out_rounds, self.lazy_worker_knock_out_rounds)
             # device index starts from 1
             self.devices_set[device_idx] = a_device
+            print(f"Sharding dataset to {a_device} done.")
+        print(f"Sharding dataset done!")
