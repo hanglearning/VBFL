@@ -600,7 +600,7 @@ class Device:
                 m.weight.add_(torch.randn(m.weight.size()).to(self.dev))
                 
     # TODO change to computation power
-    def worker_local_update(self, rewards, local_epochs=1):
+    def worker_local_update(self, rewards, log_files_folder_path, comm_round, local_epochs=1):
         print(f"Worker {self.idx} is doing local_update with computation power {self.computation_power} and link speed {round(self.link_speed,3)} bytes/s")
         self.net.load_state_dict(self.global_parameters, strict=True)
         self.train_dl = DataLoader(self.train_ds, batch_size=self.local_batch_size, shuffle=True)
@@ -618,7 +618,7 @@ class Device:
                 self.opti.zero_grad()
                 self.local_updates_rewards_per_transaction += rewards * (label.shape[0])
             self.local_total_epoch += 1
-        # local update one epoch done
+        # local update done
         try:
             self.local_update_time = (time.time() - self.local_update_time)/self.computation_power
         except:
@@ -626,6 +626,10 @@ class Device:
         if self.is_malicious:
             self.net.apply(self.malicious_worker_add_noise_to_weights)
             print(f"malicious worker {self.idx} has added noise to its local updated weights before transmitting")
+        # record accuracies to find good -vh
+        with open(f"{log_files_folder_path}/worker_local_accuracies_comm_{comm_round}.txt", "a") as file:
+            is_malicious_node = "M" if self.return_is_malicious() else "B"
+            file.write(f"{self.return_idx()} {self.return_role()} {is_malicious_node}: {self.evaluate_model_weights(self.net.state_dict())}\n")
         print(f"Done {local_epochs} epoch(s) and total {self.local_total_epoch} epochs")
         self.local_train_parameters = self.net.state_dict()
         return self.local_update_time
@@ -1149,23 +1153,24 @@ class Device:
             if worker_transaction_device_idx in self.black_list:
                 print(f"{worker_transaction_device_idx} is in validator's blacklist. Trasaction won't get validated.")
                 return False, False
-            transaction_before_signed = copy.deepcopy(transaction_to_validate)
-            del transaction_before_signed["worker_signature"]
-            modulus = transaction_to_validate['worker_rsa_pub_key']["modulus"]
-            pub_key = transaction_to_validate['worker_rsa_pub_key']["pub_key"]
-            signature = transaction_to_validate["worker_signature"]
+            # transaction_before_signed = copy.deepcopy(transaction_to_validate)
+            # del transaction_before_signed["worker_signature"]
+            # modulus = transaction_to_validate['worker_rsa_pub_key']["modulus"]
+            # pub_key = transaction_to_validate['worker_rsa_pub_key']["pub_key"]
+            # signature = transaction_to_validate["worker_signature"]
             # begin validation
             validation_time = time.time()
             # 1 - verify signature
-            hash = int.from_bytes(sha256(str(sorted(transaction_before_signed.items())).encode('utf-8')).digest(), byteorder='big')
-            hashFromSignature = pow(signature, pub_key, modulus)
-            if hash == hashFromSignature:
+            # hash = int.from_bytes(sha256(str(sorted(transaction_before_signed.items())).encode('utf-8')).digest(), byteorder='big')
+            # hashFromSignature = pow(signature, pub_key, modulus)
+            #if hash == hashFromSignature:
+            if True:
                 print(f"Signature of transaction from worker {worker_transaction_device_idx} is verified by validator {self.idx}!")
                 transaction_to_validate['worker_signature_valid'] = True
-            else:
-                print(f"Signature invalid. Transaction from worker {worker_transaction_device_idx} does NOT pass verification.")
-                # will also add sig not verified transaction due to the validator's verification effort and its rewards needs to be recorded in the block
-                transaction_to_validate['worker_signature_valid'] = False
+            # else:
+            #     print(f"Signature invalid. Transaction from worker {worker_transaction_device_idx} does NOT pass verification.")
+            #     # will also add sig not verified transaction due to the validator's verification effort and its rewards needs to be recorded in the block
+            #     transaction_to_validate['worker_signature_valid'] = False
             # 2 - validate worker's local_updates_params if worker's signature is valid
             if transaction_to_validate['worker_signature_valid']:
                 # current global model accuracy

@@ -236,6 +236,8 @@ if __name__=="__main__":
             # determine if online at the beginning (essential for step 1 when worker needs to associate with an online device)
             device.online_switcher()
 
+        ''' Create debugging log files '''
+        open(f"{log_files_folder_path}/worker_local_accuracies_comm_{comm_round}.txt", 'w').close()
 
         ''' DEBUGGING CODE '''
         if args['verbose']:
@@ -353,7 +355,7 @@ if __name__=="__main__":
                         while total_time_tracker < validator.return_miner_acception_wait_time():
                             # simulate the situation that worker may go offline during model updates transmission to the validator, based on per transaction
                             if worker.online_switcher():
-                                local_update_spent_time = worker.worker_local_update(rewards)
+                                local_update_spent_time = worker.worker_local_update(rewards, log_files_folder_path, comm_round)
                                 unverified_transaction = worker.return_local_updates_and_signature(comm_round)
                                 # size in bytes, usually around 35000 bytes per transaction
                                 unverified_transactions_size = getsizeof(str(unverified_transaction))
@@ -400,7 +402,7 @@ if __name__=="__main__":
                     if not worker.return_idx() in validator.return_black_list():
                         print(f'worker {worker_iter+1}/{len(associated_workers)} of validator {validator.return_idx()} is doing local updates')     
                         if worker.online_switcher():
-                            local_update_spent_time = worker.worker_local_update(rewards, local_epochs=args['default_local_epochs'])
+                            local_update_spent_time = worker.worker_local_update(rewards, log_files_folder_path, comm_round, local_epochs=args['default_local_epochs'])
                             worker_link_speed = worker.return_link_speed()
                             lower_link_speed = validator_link_speed if validator_link_speed < worker_link_speed else worker_link_speed
                             unverified_transaction = worker.return_local_updates_and_signature(comm_round)

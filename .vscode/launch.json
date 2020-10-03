@@ -32,6 +32,14 @@
             "request": "launch",
             "program": "${workspaceFolder}/WHDY_vanilla_malicious_involved_fedavg/plot_graph_vfl.py",
             "console": "integratedTerminal"
+        },
+        {
+            "name": "plot_graph_combine.py",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/WHDY_vanilla_malicious_involved_fedavg/plot_graph_combine.py",
+            "console": "integratedTerminal",
+            "args": ["/Users/chenhang91/Downloads/WHDY_vanilla_malicious_involved_fedavg/logs/10012020_101250", "/Users/chenhang91/Downloads/WHDY_vanilla_malicious_involved_fedavg/logs/10012020_101320", "/Users/chenhang91/Downloads/12,5,3 Full Dataset PoS no malicious"]
         }
     ]
 }
