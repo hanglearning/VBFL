@@ -17,28 +17,17 @@ from Models import Mnist_2NN, Mnist_CNN
 from Blockchain import Blockchain
 
 class Device:
-	def __init__(self, idx, assigned_train_ds, assigned_test_dl, local_batch_size, learning_rate, loss_func, opti, network_stability, net, miner_acception_wait_time, miner_accepted_transactions_size_limit, validator_threshold, pow_difficulty, even_link_speed_strength, base_data_transmission_speed, even_computation_power, is_malicious, malicious_updates_discount, knock_out_rounds, lazy_worker_knock_out_rounds):
+	def __init__(self, idx, assigned_train_ds, assigned_test_dl, local_batch_size, learning_rate, loss_func, opti, network_stability, net, dev, miner_acception_wait_time, miner_accepted_transactions_size_limit, validator_threshold, pow_difficulty, even_link_speed_strength, base_data_transmission_speed, even_computation_power, is_malicious, malicious_updates_discount, knock_out_rounds, lazy_worker_knock_out_rounds):
 		self.idx = idx
 		self.train_ds = assigned_train_ds
 		self.test_dl = assigned_test_dl
 		self.local_batch_size = local_batch_size
 		self.loss_func = loss_func
 		self.network_stability = network_stability
-		# create neural net based on the input model name
-		if net == 'mnist_2nn':
-			self.net = Mnist_2NN()
-		elif net == 'mnist_cnn':
-			self.net = Mnist_CNN()
-		# set optimizer
+		self.net = copy.deepcopy(net)
 		if opti == "SGD":
 			self.opti = optim.SGD(self.net.parameters(), lr=learning_rate)
-		# assign CUDA GPUs to the net if available
-		self.dev = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-		if torch.cuda.device_count() > 1:
-			self.net = torch.nn.DataParallel(self.net)
-		print(f"{torch.cuda.device_count()} GPUs are available to use for device {self.idx}!")
-		self.net = self.net.to(self.dev)
-		# 
+		self.dev = dev
 		self.train_dl = None
 		self.local_train_parameters = None
 		self.initial_net_parameters = None
@@ -148,8 +137,7 @@ class Device:
 		signature = pow(hash, self.private_key, self.modulus)
 		return signature
 
-	def init_global_parameters(self, initial_net_parameters):
-		self.net.load_state_dict(initial_net_parameters, strict=True)
+	def init_global_parameters(self):
 		self.initial_net_parameters = self.net.state_dict()
 		self.global_parameters = self.net.state_dict()
 
@@ -630,7 +618,6 @@ class Device:
 				self.opti.step()
 				self.opti.zero_grad()
 				self.local_updates_rewards_per_transaction += rewards * (label.shape[0])
-				
 			self.local_total_epoch += 1
 		# local update done
 		try:
@@ -668,7 +655,6 @@ class Device:
 				loss.backward()
 				evaluation_opti.step()
 				evaluation_opti.zero_grad()
-				
 			return (time.time() - local_update_time)/self.computation_power, evaluation_net.state_dict()
 
 	def set_accuracy_this_round(self, accuracy):
@@ -1226,7 +1212,7 @@ class Device:
 			return validation_time, transaction_to_validate
 
 class DevicesInNetwork(object):
-	def __init__(self, data_set_name, is_iid, batch_size, learning_rate, loss_func, opti, num_devices, network_stability, net, knock_out_rounds, lazy_worker_knock_out_rounds, shard_test_data, miner_acception_wait_time, miner_accepted_transactions_size_limit, validator_threshold, pow_difficulty, even_link_speed_strength, base_data_transmission_speed, even_computation_power, malicious_updates_discount, num_malicious):
+	def __init__(self, data_set_name, is_iid, batch_size, learning_rate, loss_func, opti, num_devices, network_stability, net, dev, knock_out_rounds, lazy_worker_knock_out_rounds, shard_test_data, miner_acception_wait_time, miner_accepted_transactions_size_limit, validator_threshold, pow_difficulty, even_link_speed_strength, base_data_transmission_speed, even_computation_power, malicious_updates_discount, num_malicious):
 		self.data_set_name = data_set_name
 		self.is_iid = is_iid
 		self.batch_size = batch_size
@@ -1235,6 +1221,7 @@ class DevicesInNetwork(object):
 		self.opti = opti
 		self.num_devices = num_devices
 		self.net = net
+		self.dev = dev
 		self.devices_set = {}
 		self.knock_out_rounds = knock_out_rounds
 		self.lazy_worker_knock_out_rounds = lazy_worker_knock_out_rounds
@@ -1314,7 +1301,7 @@ class DevicesInNetwork(object):
 				# add Gussian Noise
 
 			device_idx = f'device_{i+1}'
-			a_device = Device(device_idx, TensorDataset(torch.tensor(local_train_data), torch.tensor(local_train_label)), test_data_loader, self.batch_size, self.learning_rate, self.loss_func, self.opti, self.default_network_stability, self.net, self.miner_acception_wait_time, self.miner_accepted_transactions_size_limit, self.validator_threshold, self.pow_difficulty, self.even_link_speed_strength, self.base_data_transmission_speed, self.even_computation_power, is_malicious, self.malicious_updates_discount, self.knock_out_rounds, self.lazy_worker_knock_out_rounds)
+			a_device = Device(device_idx, TensorDataset(torch.tensor(local_train_data), torch.tensor(local_train_label)), test_data_loader, self.batch_size, self.learning_rate, self.loss_func, self.opti, self.default_network_stability, self.net, self.dev, self.miner_acception_wait_time, self.miner_accepted_transactions_size_limit, self.validator_threshold, self.pow_difficulty, self.even_link_speed_strength, self.base_data_transmission_speed, self.even_computation_power, is_malicious, self.malicious_updates_discount, self.knock_out_rounds, self.lazy_worker_knock_out_rounds)
 			# device index starts from 1
 			self.devices_set[device_idx] = a_device
 			print(f"Sharding dataset to {device_idx} done.")

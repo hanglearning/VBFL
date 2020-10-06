@@ -1,0 +1,490 @@
+
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Parameter: GPU pinned  32 × 1 × 5 × 5
+Parameter: GPU pinned  32
+Parameter: GPU pinned  64 × 32 × 5 × 5
+Parameter: GPU pinned  64
+Parameter: GPU pinned  512 × 3136
+Parameter: GPU pinned  512
+Parameter: GPU pinned  10 × 512
+Parameter: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Parameter: GPU pinned  32 × 1 × 5 × 5
+Parameter: GPU pinned  32
+Parameter: GPU pinned  64 × 32 × 5 × 5
+Parameter: GPU pinned  64
+Parameter: GPU pinned  512 × 3136
+Parameter: GPU pinned  512
+Parameter: GPU pinned  10 × 512
+Parameter: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Parameter: GPU pinned  32 × 1 × 5 × 5
+Parameter: GPU pinned  32
+Parameter: GPU pinned  64 × 32 × 5 × 5
+Parameter: GPU pinned  64
+Parameter: GPU pinned  512 × 3136
+Parameter: GPU pinned  512
+Parameter: GPU pinned  10 × 512
+Parameter: GPU pinned  10
+Parameter: GPU pinned  32 × 1 × 5 × 5
+Parameter: GPU pinned  32
+Parameter: GPU pinned  64 × 32 × 5 × 5
+Parameter: GPU pinned  64
+Parameter: GPU pinned  512 × 3136
+Parameter: GPU pinned  512
+Parameter: GPU pinned  10 × 512
+Parameter: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Parameter: GPU pinned  32 × 1 × 5 × 5
+Parameter: GPU pinned  32
+Parameter: GPU pinned  64 × 32 × 5 × 5
+Parameter: GPU pinned  64
+Parameter: GPU pinned  512 × 3136
+Parameter: GPU pinned  512
+Parameter: GPU pinned  10 × 512
+Parameter: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Parameter: GPU pinned  32 × 1 × 5 × 5
+Parameter: GPU pinned  32
+Parameter: GPU pinned  64 × 32 × 5 × 5
+Parameter: GPU pinned  64
+Parameter: GPU pinned  512 × 3136
+Parameter: GPU pinned  512
+Parameter: GPU pinned  10 × 512
+Parameter: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Parameter: GPU pinned  32 × 1 × 5 × 5
+Parameter: GPU pinned  32
+Parameter: GPU pinned  64 × 32 × 5 × 5
+Parameter: GPU pinned  64
+Parameter: GPU pinned  512 × 3136
+Parameter: GPU pinned  512
+Parameter: GPU pinned  10 × 512
+Parameter: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Parameter: GPU pinned  32 × 1 × 5 × 5
+Parameter: GPU pinned  32
+Parameter: GPU pinned  64 × 32 × 5 × 5
+Parameter: GPU pinned  64
+Parameter: GPU pinned  512 × 3136
+Parameter: GPU pinned  512
+Parameter: GPU pinned  10 × 512
+Parameter: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Parameter: GPU pinned  32 × 1 × 5 × 5
+Parameter: GPU pinned  32
+Parameter: GPU pinned  64 × 32 × 5 × 5
+Parameter: GPU pinned  64
+Parameter: GPU pinned  512 × 3136
+Parameter: GPU pinned  512
+Parameter: GPU pinned  10 × 512
+Parameter: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Parameter: GPU pinned  32 × 1 × 5 × 5
+Parameter: GPU pinned  32
+Parameter: GPU pinned  64 × 32 × 5 × 5
+Parameter: GPU pinned  64
+Parameter: GPU pinned  512 × 3136
+Parameter: GPU pinned  512
+Parameter: GPU pinned  10 × 512
+Parameter: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Parameter: GPU pinned  32 × 1 × 5 × 5
+Parameter: GPU pinned  32
+Parameter: GPU pinned  64 × 32 × 5 × 5
+Parameter: GPU pinned  64
+Parameter: GPU pinned  512 × 3136
+Parameter: GPU pinned  512
+Parameter: GPU pinned  10 × 512
+Parameter: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Parameter: GPU pinned  32 × 1 × 5 × 5
+Parameter: GPU pinned  32
+Parameter: GPU pinned  64 × 32 × 5 × 5
+Parameter: GPU pinned  64
+Parameter: GPU pinned  512 × 3136
+Parameter: GPU pinned  512
+Parameter: GPU pinned  10 × 512
+Parameter: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Parameter: GPU pinned  32 × 1 × 5 × 5
+Parameter: GPU pinned  32
+Parameter: GPU pinned  64 × 32 × 5 × 5
+Parameter: GPU pinned  64
+Parameter: GPU pinned  512 × 3136
+Parameter: GPU pinned  512
+Parameter: GPU pinned  10 × 512
+Parameter: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Parameter: GPU pinned  32 × 1 × 5 × 5
+Parameter: GPU pinned  32
+Parameter: GPU pinned  64 × 32 × 5 × 5
+Parameter: GPU pinned  64
+Parameter: GPU pinned  512 × 3136
+Parameter: GPU pinned  512
+Parameter: GPU pinned  10 × 512
+Parameter: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Parameter: GPU pinned  32 × 1 × 5 × 5
+Parameter: GPU pinned  32
+Parameter: GPU pinned  64 × 32 × 5 × 5
+Parameter: GPU pinned  64
+Parameter: GPU pinned  512 × 3136
+Parameter: GPU pinned  512
+Parameter: GPU pinned  10 × 512
+Parameter: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Parameter: GPU pinned  32 × 1 × 5 × 5
+Parameter: GPU pinned  32
+Parameter: GPU pinned  64 × 32 × 5 × 5
+Parameter: GPU pinned  64
+Parameter: GPU pinned  512 × 3136
+Parameter: GPU pinned  512
+Parameter: GPU pinned  10 × 512
+Parameter: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Parameter: GPU pinned  32 × 1 × 5 × 5
+Parameter: GPU pinned  32
+Parameter: GPU pinned  64 × 32 × 5 × 5
+Parameter: GPU pinned  64
+Parameter: GPU pinned  512 × 3136
+Parameter: GPU pinned  512
+Parameter: GPU pinned  10 × 512
+Parameter: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Parameter: GPU pinned  32 × 1 × 5 × 5
+Parameter: GPU pinned  32
+Parameter: GPU pinned  64 × 32 × 5 × 5
+Parameter: GPU pinned  64
+Parameter: GPU pinned  512 × 3136
+Parameter: GPU pinned  512
+Parameter: GPU pinned  10 × 512
+Parameter: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Parameter: GPU pinned  32 × 1 × 5 × 5
+Parameter: GPU pinned  32
+Parameter: GPU pinned  64 × 32 × 5 × 5
+Parameter: GPU pinned  64
+Parameter: GPU pinned  512 × 3136
+Parameter: GPU pinned  512
+Parameter: GPU pinned  10 × 512
+Parameter: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Parameter: GPU pinned  32 × 1 × 5 × 5
+Parameter: GPU pinned  32
+Parameter: GPU pinned  64 × 32 × 5 × 5
+Parameter: GPU pinned  64
+Parameter: GPU pinned  512 × 3136
+Parameter: GPU pinned  512
+Parameter: GPU pinned  10 × 512
+Parameter: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Tensor: GPU pinned  32 × 1 × 5 × 5
+Tensor: GPU pinned  32
+Tensor: GPU pinned  64 × 32 × 5 × 5
+Tensor: GPU pinned  64
+Tensor: GPU pinned  512 × 3136
+Tensor: GPU pinned  512
+Tensor: GPU pinned  10 × 512
+Tensor: GPU pinned  10
+Parameter: GPU pinned  32 × 1 × 5 × 5
+Parameter: GPU pinned  32
+Parameter: GPU pinned  64 × 32 × 5 × 5
+Parameter: GPU pinned  64
+Parameter: GPU pinned  512 × 3136
+Parameter: GPU pinned  512
+Parameter: GPU pinned  10 × 512
+Parameter: GPU pinned  10
+Total size: 101465570

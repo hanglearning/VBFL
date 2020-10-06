@@ -90,6 +90,10 @@ class Block:
 	def return_transactions(self):
 		return self._transactions
 
+	# def free_tx(self):
+	# 	del self._transactions
+		
+
 	# ''' Validator Specific '''
 	# def is_validator_block(self):
 	#	 return self._is_validator_block

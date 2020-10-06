@@ -26,7 +26,7 @@ class Blockchain:
 			return None
 
 	def replace_chain(self, chain):
-		self.chain = copy.deepcopy(chain)
+		self.chain = copy.copy(chain)
 
 	def append_block(self, block):
-		self.chain.append(copy.deepcopy(block))
+		self.chain.append(copy.copy(block))

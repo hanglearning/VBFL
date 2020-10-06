@@ -26,6 +26,7 @@ from datetime import datetime
 import copy
 from sys import getsizeof
 import sqlite3
+import pickle
 import torch
 import torch.nn.functional as F
 from Models import Mnist_2NN, Mnist_CNN
@@ -38,6 +39,8 @@ parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFo
 # program attributes
 parser.add_argument('-g', '--gpu', type=str, default='0', help='gpu id to use(e.g. 0,1,2,3)')
 parser.add_argument('-v', '--verbose', type=int, default=0, help='print verbose debug log')
+parser.add_argument('-sp', '--save_path', type=str, default=None, help='the saving path of network_snapshots')
+parser.add_argument('-sf', '--save_freq', type=int, default=5, help='save frequency of the network_snapshot')
 
 # FL attributes
 parser.add_argument('-B', '--batchsize', type=int, default=10, help='local train batch size')
@@ -72,7 +75,7 @@ parser.add_argument('-dts', '--base_data_transmission_speed', type=float, defaul
 parser.add_argument('-ecp', '--even_computation_power', type=int, default=1, help="This variable is used to simulate strength of hardware equipment. The calculation time will be shrunk down by this value. Default value 1 means evenly assign computation power to 1. If set to 0, power is randomly initiated as an int between 0 and 4, both included.")
 
 
-# parser.add_argument('-sp', '--save_path', type=str, default='./checkpoints', help='the saving path of checkpoints')
+# parser.add_argument('-sp', '--save_path', type=str, default='./network_snapshots', help='the saving path of network_snapshots')
 # parser.add_argument('-la', '--least_assign', type=str, default='*,*,*', help='the assigned number of roles are at least guaranteed in the network')
 
 def pretty_size(size):
@@ -113,31 +116,137 @@ def dump_tensors(log_files_folder_path, comm_round, gpu_only=True):
 
 if __name__=="__main__":
 
-	''' SETTING UP '''
-
-	# 0. set program running time for logging purpose
-	date_time = datetime.now().strftime("%m%d%Y_%H%M%S")
-
-	# 1. parse arguments and save to file
-	# create folder of logs
-	log_files_folder_path = f"logs/{date_time}"
-	os.mkdir(log_files_folder_path)
-	# save arguments used 
+	# save arguments used and create folder of logs
 	args = parser.parse_args()
 	args = args.__dict__
-	with open(f'{log_files_folder_path}/args_used.txt', 'w') as f:
-		f.write("Command line arguments used -\n")
-		f.write(' '.join(sys.argv[1:]))
-		f.write("\n\nAll arguments used -\n")
-		for arg_name, arg in args.items():
-			f.write(f'--{arg_name} {arg} ')
+	
+	# use gpu or cpu
+	dev = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+
+	latest_round_num = 0
 
 	# 2. for demonstration purposes, this reward is for every rewarded action
 	rewards = args["general_rewards"]
 
 	# 3. get number of roles needed in the network
 	roles_requirement = args['hard_assign'].split(',')
-	
+			
+	''' If network_snapshot is specified, continue from left '''
+	network_snapshots_base_folder = "/work/ececis_research/chenhang/bfa_network_snapshots"
+	if args['save_path']:
+		network_snapshot_save_path = f"{network_snapshots_base_folder}/{args['save_path']}"
+		latest_network_snapshot_file_name = sorted([f for f in os.listdir(network_snapshot_save_path) if not f.startswith('.')], reverse=True)[0]
+		print(f"Loading network snapshot from {args['save_path']}/{latest_network_snapshot_file_name}")
+		print("BE CAREFUL - loaded dev env must be the same as the current dev env, namely, cpu, gpu or gpu parallel")
+		latest_round_num = int(latest_network_snapshot_file_name.split('_')[-1])
+		devices_in_network = pickle.load(open(f"{network_snapshot_save_path}/{latest_network_snapshot_file_name}", "rb"))
+		devices_list = list(devices_in_network.devices_set.values())
+		log_files_folder_path = f"logs/{args['save_path']}"
+		# original arguments file
+		args_used_file = f"{log_files_folder_path}/args_used.txt"
+		file = open(args_used_file,"r") 
+		log_whole_text = file.read() 
+		lines_list = log_whole_text.split("\n")
+		for line in lines_list:
+			# abide by the original specified rewards
+			if line.startswith('--general_rewards'):
+				rewards = int(line.split(" ")[-1])
+			# get number of roles
+			if line.startswith('--hard_assign'):
+				roles_requirement = line.split(" ")[-1].split(',')
+	else:
+		''' SETTING UP '''
+		# set program running time for logging purpose
+		date_time = datetime.now().strftime("%m%d%Y_%H%M%S")
+		log_files_folder_path = f"logs/{date_time}"
+		os.mkdir(log_files_folder_path)
+		with open(f'{log_files_folder_path}/args_used.txt', 'w') as f:
+			f.write("Command line arguments used -\n")
+			f.write(' '.join(sys.argv[1:]))
+			f.write("\n\nAll arguments used -\n")
+			for arg_name, arg in args.items():
+				f.write(f'\n--{arg_name} {arg} ')
+				
+		# 0. create network_snapshot folder
+		network_snapshot_save_path = f"{network_snapshots_base_folder}/{date_time}"
+		os.mkdir(network_snapshot_save_path)
+		
+		
+
+		# 4. check arguments eligibility
+
+		num_devices = args['num_devices']
+		num_malicious = args['num_malicious']
+		
+		if num_devices < workers_needed + miners_needed + validators_needed:
+			sys.exit("ERROR: Roles assigned to the devices exceed the maximum number of allowed devices in the network.")
+
+		if num_devices < 3:
+			sys.exit("ERROR: There are not enough devices in the network.\n The system needs at least one miner, one worker and/or one validator to start the operation.\nSystem aborted.")
+
+		
+		if num_malicious:
+			if num_malicious > num_devices:
+				sys.exit("ERROR: The number of malicious nodes cannot exceed the total number of devices set in this network")
+			else:
+				print(f"Malicious nodes vs total devices set to {num_malicious}/{num_devices} = {(num_malicious/num_devices)*100:.2f}%")
+
+		# 5. create neural net based on the input model name
+		net = None
+		if args['model_name'] == 'mnist_2nn':
+			net = Mnist_2NN()
+		elif args['model_name'] == 'mnist_cnn':
+			net = Mnist_CNN()
+
+		# 6. assign GPU(s) if available to the net
+		# os.environ['CUDA_VISIBLE_DEVICES'] = args['gpu']
+		if torch.cuda.device_count() > 1:
+			net = torch.nn.DataParallel(net)
+		print(f"{torch.cuda.device_count()} GPUs are available to use!")
+		net = net.to(dev)
+
+
+		# 6. set loss_function
+		loss_func = F.cross_entropy
+
+		# 7. create devices in the network
+		devices_in_network = DevicesInNetwork(data_set_name='mnist', is_iid=args['IID'], batch_size = args['batchsize'], learning_rate =  args['learning_rate'], loss_func = loss_func, opti = args['optimizer'], num_devices=num_devices, network_stability=args['network_stability'], net=net, dev=dev, knock_out_rounds=args['knock_out_rounds'], lazy_worker_knock_out_rounds=args['lazy_worker_knock_out_rounds'], shard_test_data=args['shard_test_data'], miner_acception_wait_time=args['miner_acception_wait_time'], miner_accepted_transactions_size_limit=args['miner_accepted_transactions_size_limit'], validator_threshold=args['validator_threshold'], pow_difficulty=args['pow_difficulty'], even_link_speed_strength=args['even_link_speed_strength'], base_data_transmission_speed=args['base_data_transmission_speed'], even_computation_power=args['even_computation_power'], malicious_updates_discount=args['malicious_updates_discount'], num_malicious=num_malicious)
+		del net
+		devices_list = list(devices_in_network.devices_set.values())
+
+		# 8. register devices and initialize global parameterms
+		for device in devices_list:
+			# set initial global weights
+			device.init_global_parameters()
+			# helper function for registration simulation - set devices_list and aio
+			device.set_devices_dict_and_aio(devices_in_network.devices_set, args["all_in_one"])
+			# simulate peer registration, with respect to device idx order
+			device.register_in_the_network()
+		# remove its own from peer list if there is
+		for device in devices_list:
+			device.remove_peers(device)
+
+		# 9. build a dict to record device accuracies accross rounds
+		devices_accuracies_records = {}
+		for device_seq, device in devices_in_network.devices_set.items():
+			devices_accuracies_records[device_seq] = {}
+
+		# 10. build logging files/database path
+		# create log files
+		open(f"{log_files_folder_path}/correctly_kicked_workers.txt", 'w').close()
+		open(f"{log_files_folder_path}/mistakenly_kicked_workers.txt", 'w').close()
+		open(f"{log_files_folder_path}/false_positive_malious_nodes_inside_slipped.txt", 'w').close()
+		open(f"{log_files_folder_path}/false_negative_good_nodes_inside_victims.txt", 'w').close()
+		# open(f"{log_files_folder_path}/correctly_kicked_validators.txt", 'w').close()
+		# open(f"{log_files_folder_path}/mistakenly_kicked_validators.txt", 'w').close()
+		open(f"{log_files_folder_path}/kicked_lazy_workers.txt", 'w').close()
+
+
+	# 11. make chechpoint save path
+	# if not os.path.isdir(args['save_path']):
+	#	 os.mkdir(args['save_path'])
+
+	# determine roles to assign
 	try:
 		workers_needed = int(roles_requirement[0])
 	except:
@@ -152,78 +261,7 @@ if __name__=="__main__":
 		miners_needed = int(roles_requirement[2])
 	except:
 		miners_needed = 1
-	
-	
 
-	# 4. check arguments eligibility
-
-	num_devices = args['num_devices']
-	num_malicious = args['num_malicious']
-	
-	if num_devices < workers_needed + miners_needed + validators_needed:
-		sys.exit("ERROR: Roles assigned to the devices exceed the maximum number of allowed devices in the network.")
-
-	if num_devices < 3:
-		sys.exit("ERROR: There are not enough devices in the network.\n The system needs at least one miner, one worker and/or one validator to start the operation.\nSystem aborted.")
-
-	
-	if num_malicious:
-		if num_malicious > num_devices:
-			sys.exit("ERROR: The number of malicious nodes cannot exceed the total number of devices set in this network")
-		else:
-			print(f"Malicious nodes vs total devices set to {num_malicious}/{num_devices} = {(num_malicious/num_devices)*100:.2f}%")
-
-	# 5. create neural net based on the input model name
-	net = None
-	if args['model_name'] == 'mnist_2nn':
-		net = Mnist_2NN()
-	elif args['model_name'] == 'mnist_cnn':
-		net = Mnist_CNN()
-
-	# 6. assign GPUs if available and prepare the net
-	# os.environ['CUDA_VISIBLE_DEVICES'] = args['gpu']
-	print(torch.cuda.is_available())
-	dev = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-	if torch.cuda.device_count() > 1:
-		net = torch.nn.DataParallel(net)
-	print(f"{torch.cuda.device_count()} GPUs are available to use!")
-	net = net.to(dev)
-	initial_net_parameters = net.state_dict()
-
-	# 6. set loss_function
-	loss_func = F.cross_entropy
-
-	# 7. create devices in the network
-	devices_in_network = DevicesInNetwork(data_set_name='mnist', is_iid=args['IID'], batch_size = args['batchsize'], learning_rate =  args['learning_rate'], loss_func = loss_func, opti = args['optimizer'], num_devices=num_devices, network_stability=args['network_stability'], net=args['model_name'], knock_out_rounds=args['knock_out_rounds'], lazy_worker_knock_out_rounds=args['lazy_worker_knock_out_rounds'], shard_test_data=args['shard_test_data'], miner_acception_wait_time=args['miner_acception_wait_time'], miner_accepted_transactions_size_limit=args['miner_accepted_transactions_size_limit'], validator_threshold=args['validator_threshold'], pow_difficulty=args['pow_difficulty'], even_link_speed_strength=args['even_link_speed_strength'], base_data_transmission_speed=args['base_data_transmission_speed'], even_computation_power=args['even_computation_power'], malicious_updates_discount=args['malicious_updates_discount'], num_malicious=num_malicious)
-	devices_list = list(devices_in_network.devices_set.values())
-
-	# 8. register devices and initialize global parameterms
-	for device in devices_list:
-		# set initial global weights
-		device.init_global_parameters(initial_net_parameters)
-		# helper function for registration simulation - set devices_list and aio
-		device.set_devices_dict_and_aio(devices_in_network.devices_set, args["all_in_one"])
-		# simulate peer registration, with respect to device idx order
-		device.register_in_the_network()
-	del net
-	# remove its own from peer list if there is
-	for device in devices_list:
-		device.remove_peers(device)
-
-	# 9. build a dict to record device accuracies accross rounds
-	devices_accuracies_records = {}
-	for device_seq, device in devices_in_network.devices_set.items():
-		devices_accuracies_records[device_seq] = {}
-
-	# 10. build logging files/database path
-	# create log files
-	open(f"{log_files_folder_path}/correctly_kicked_workers.txt", 'w').close()
-	open(f"{log_files_folder_path}/mistakenly_kicked_workers.txt", 'w').close()
-	open(f"{log_files_folder_path}/false_positive_malious_nodes_inside_slipped.txt", 'w').close()
-	open(f"{log_files_folder_path}/false_negative_good_nodes_inside_victims.txt", 'w').close()
-	# open(f"{log_files_folder_path}/correctly_kicked_validators.txt", 'w').close()
-	# open(f"{log_files_folder_path}/mistakenly_kicked_validators.txt", 'w').close()
-	open(f"{log_files_folder_path}/kicked_lazy_workers.txt", 'w').close()
 	# create malicious worker identification database
 	conn = sqlite3.connect(f'{log_files_folder_path}/malicious_wokrer_identifying_log.db')
 	conn_cursor = conn.cursor()
@@ -235,23 +273,17 @@ if __name__=="__main__":
 	in_round integer,
 	when_resyncing text
 	)""")
-
-
-	# 11. make chechpoint save path
-	# if not os.path.isdir(args['save_path']):
-	#	 os.mkdir(args['save_path'])
-
 	# BlockFL starts here
-	for comm_round in range(1, args['max_num_comm']+1):
+	for comm_round in range(latest_round_num + 1, args['max_num_comm']+1):
 		# free cuda memory
 		if dev == torch.device("cuda"):
 			with torch.cuda.device('cuda'):
 				torch.cuda.empty_cache()
-			t = torch.cuda.get_device_properties(0).total_memory
-			c = torch.cuda.memory_cached(0)
-			a = torch.cuda.memory_allocated(0)
-			print(f"total {t}, cached {(c/t)*100:.2f}, allo {(a/t)*100:.2f}")
-			dump_tensors(log_files_folder_path, comm_round)
+				t = torch.cuda.get_device_properties(0).total_memory
+				c = torch.cuda.memory_cached(0)
+				a = torch.cuda.memory_allocated(0)
+				print(f"total {t}, cached {(c/t)*100:.2f}, allo {(a/t)*100:.2f}")
+				dump_tensors(log_files_folder_path, comm_round)
 		print(f"\nCommunication round {comm_round}")
 		comm_round_start_time = time.time()
 		# (RE)ASSIGN ROLES
@@ -783,3 +815,14 @@ if __name__=="__main__":
 			file.write(f"forking_happened: {forking_happened}\n")
 			file.write(f"comm_round_spent_time_on_this_machine: {comm_round_spent_time}")
 		conn.commit()
+
+		# save network_snapshot if reaches save frequency
+		if comm_round == 1 or comm_round % args['save_freq'] == 0:
+			snapshot_file_path = f"{network_snapshot_save_path}/snapshot_r_{comm_round}"
+			print(f"Saving network snapshot to {snapshot_file_path}")
+			pickle.dump(devices_in_network, open(snapshot_file_path, "wb"))
+
+		# # try free mem
+		# for device in devices_list:
+		# 	last_block = device.return_blockchain_object().return_last_block()
+		# 	last_block.free_tx()

@@ -1,6 +1,6 @@
 {
-    "python.pythonPath": "/home/2105/anaconda3/envs/bfa/bin/python",
-    "editor.insertSpaces": false,
+	"python.pythonPath": "/home/2105/anaconda3/envs/bfa/bin/python",
+	"editor.insertSpaces": false,
 	"editor.tabSize": 4,
 	"editor.detectIndentation": true
 }
