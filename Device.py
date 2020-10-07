@@ -28,7 +28,8 @@ class Device:
 		if opti == "SGD":
 			self.opti = optim.SGD(self.net.parameters(), lr=learning_rate)
 		self.dev = dev
-		self.train_dl = None
+		# in real system, new data can come in, so train_dl should get reassigned before training when that happens
+		self.train_dl = DataLoader(self.train_ds, batch_size=self.local_batch_size, shuffle=True)
 		self.local_train_parameters = None
 		self.initial_net_parameters = None
 		self.global_parameters = None
@@ -111,6 +112,7 @@ class Device:
 		self.final_transactions_queue_to_validate = {}
 		self.post_validation_transactions_queue = None or []
 		self.validator_threshold = validator_threshold
+		self.validator_local_accuracy = None
 		
 		
 
@@ -424,19 +426,24 @@ class Device:
 							if self.idx == worker_device_idx:
 								self_rewards_accumulator += valid_validator_sig_worker_transaciton['local_updates_rewards']
 						else:
-							# worker transaction voted negative and has to be applied for a discount
-							valid_transactions_records_by_worker[worker_device_idx]['negative_epochs'].add(local_epoch_seq)
-							valid_transactions_records_by_worker[worker_device_idx]['all_valid_epochs'].add(local_epoch_seq)
-							# see if this is the latest epoch from this worker
-							if local_epoch_seq == max(valid_transactions_records_by_worker[worker_device_idx]['all_valid_epochs']):
-								# apply discount
-								discounted_valid_validator_sig_worker_transaciton_local_updates_params = copy.deepcopy(valid_validator_sig_worker_transaciton['local_updates_params'])
-								for var in discounted_valid_validator_sig_worker_transaciton_local_updates_params:
-									discounted_valid_validator_sig_worker_transaciton_local_updates_params[var] *= self.malicious_updates_discount
-								valid_transactions_records_by_worker[worker_device_idx]['finally_used_params'] = discounted_valid_validator_sig_worker_transaciton_local_updates_params
-							# worker receive discounted rewards for negative update
-							if self.idx == worker_device_idx:
-								self_rewards_accumulator += valid_validator_sig_worker_transaciton['local_updates_rewards'] * self.malicious_updates_discount
+							if self.malicious_updates_discount:
+								# worker transaction voted negative and has to be applied for a discount
+								valid_transactions_records_by_worker[worker_device_idx]['negative_epochs'].add(local_epoch_seq)
+								valid_transactions_records_by_worker[worker_device_idx]['all_valid_epochs'].add(local_epoch_seq)
+								# see if this is the latest epoch from this worker
+								if local_epoch_seq == max(valid_transactions_records_by_worker[worker_device_idx]['all_valid_epochs']):
+									# apply discount
+									discounted_valid_validator_sig_worker_transaciton_local_updates_params = copy.deepcopy(valid_validator_sig_worker_transaciton['local_updates_params'])
+									for var in discounted_valid_validator_sig_worker_transaciton_local_updates_params:
+										discounted_valid_validator_sig_worker_transaciton_local_updates_params[var] *= self.malicious_updates_discount
+									valid_transactions_records_by_worker[worker_device_idx]['finally_used_params'] = discounted_valid_validator_sig_worker_transaciton_local_updates_params
+								# worker receive discounted rewards for negative update
+								if self.idx == worker_device_idx:
+									self_rewards_accumulator += valid_validator_sig_worker_transaciton['local_updates_rewards'] * self.malicious_updates_discount
+							else:
+								# discount specified as 0, worker transaction voted negative and cannot be used
+								valid_transactions_records_by_worker[worker_device_idx]['negative_epochs'].add(local_epoch_seq)
+								# worker does not receive rewards for negative update
 						# give rewards to validators and the miner in this transaction
 						for validator_record in positive_direction_validators + negative_direction_validators:
 							if self.idx == validator_record['validator']:
@@ -604,7 +611,6 @@ class Device:
 	def worker_local_update(self, rewards, log_files_folder_path, comm_round, local_epochs=1):
 		print(f"Worker {self.idx} is doing local_update with computation power {self.computation_power} and link speed {round(self.link_speed,3)} bytes/s")
 		self.net.load_state_dict(self.global_parameters, strict=True)
-		self.train_dl = DataLoader(self.train_ds, batch_size=self.local_batch_size, shuffle=True)
 		self.local_update_time = time.time()
 		# local worker update by specified epochs
 		# usually, if validator acception time is specified, local_epochs should be 1
@@ -638,7 +644,7 @@ class Device:
 	# used to simulate time waste when worker goes offline during transmission to validator
 	def waste_one_epoch_local_update_time(self, opti):
 		if self.computation_power == 0:
-			return float('inf')
+			return float('inf'), None
 		else:
 			evaluation_net = copy.deepcopy(self.net)
 			currently_used_lr = 0.01
@@ -969,6 +975,7 @@ class Device:
 		self.has_added_block = False
 		self.the_added_block = None
 		self.validator_associated_miner = None
+		self.validator_local_accuracy = None
 		self.validator_associated_worker_set.clear()
 		#self.post_validation_transactions.clear()
 		#self.broadcasted_post_validation_transactions.clear()
@@ -1145,6 +1152,42 @@ class Device:
 	def return_final_transactions_validating_queue(self):
 		return self.final_transactions_queue_to_validate
 
+	def validator_update_model_by_one_epoch_and_evaluate_local_accuracy(self, opti):
+		# return time spent
+		print(f"validator {self.idx} is performing one epoch of local update and evaluation")
+		if self.computation_power == 0:
+			print(f"validator {self.idx} has computation power 0 and will not be able to complete this evaluation")
+			return float('inf')
+		else:
+			updated_net = copy.deepcopy(self.net)
+			currently_used_lr = 0.01
+			for param_group in self.opti.param_groups:
+				currently_used_lr = param_group['lr']
+			# by default use SGD. Did not implement others
+			if opti == 'SGD':
+				evaluation_opti = optim.SGD(updated_net.parameters(), lr=currently_used_lr)
+			local_evaluation_time = time.time()
+			for data, label in self.train_dl:
+				data, label = data.to(self.dev), label.to(self.dev)
+				preds = updated_net(data)
+				loss = self.loss_func(preds, label)
+				loss.backward()
+				evaluation_opti.step()
+				evaluation_opti.zero_grad()
+			# evaluate by local test set
+			with torch.no_grad():
+				sum_accu = 0
+				num = 0
+				for data, label in self.test_dl:
+					data, label = data.to(self.dev), label.to(self.dev)
+					preds = updated_net(data)
+					preds = torch.argmax(preds, dim=1)
+					sum_accu += (preds == label).float().mean()
+					num += 1
+			self.validator_local_accuracy = sum_accu / num
+			print(f"validator {self.idx} locally updated model has accuracy {self.validator_local_accuracy} on its local test set")
+			return (time.time() - local_evaluation_time)/self.computation_power
+
 	# TODO validator_threshold
 	def validate_worker_transaction(self, transaction_to_validate, rewards, log_files_folder_path, comm_round):
 		if self.computation_power == 0:
@@ -1175,14 +1218,16 @@ class Device:
 			#	 transaction_to_validate['worker_signature_valid'] = False
 			# 2 - validate worker's local_updates_params if worker's signature is valid
 			if transaction_to_validate['worker_signature_valid']:
-				# current global model accuracy
-				current_accuracy = self.evaluate_model_weights()
 				# accuracy evaluated by worker's update
 				accuracy_by_worker_update_using_own_data = self.evaluate_model_weights(transaction_to_validate["local_updates_params"])
-				# if the decrease of accuracy by worker's updates exceeds the validator threshold value, False, otherwise True
-				print(f'Current validator model accuracy - {current_accuracy}')
+				# if worker's accuracy larger, or lower but the difference falls within the validator threshold value, meaning worker's updated model favors validator's dataset, so their updates are in the same direction - True, otherwise False. We do not consider the accuracy gap so far, meaning if worker's update is way too good, it is still fine
+				print(f'Validator updated model accuracy - {self.validator_local_accuracy}')
 				print(f"After applying worker's update, model accuracy becomes - {accuracy_by_worker_update_using_own_data}")
-				if accuracy_by_worker_update_using_own_data - current_accuracy < self.validator_threshold * -1:
+				# record their accuracies and difference for choosing a good validator threshold
+				with open(f"{log_files_folder_path}/validator_records_comm_{comm_round}.txt", "a") as file:
+					is_malicious_node = "M" if self.devices_dict[worker_transaction_device_idx].return_is_malicious() else "B"
+					file.write(f"diff = {accuracy_by_worker_update_using_own_data - self.validator_local_accuracy}: validator {self.return_idx()} in round {comm_round} evluating worker {worker_transaction_device_idx} {is_malicious_node}, v_acc - {self.validator_local_accuracy}, w_acc - {accuracy_by_worker_update_using_own_data} \n")
+				if accuracy_by_worker_update_using_own_data - self.validator_local_accuracy < self.validator_threshold * -1:
 					transaction_to_validate['update_direction'] = False
 					print(f"NOTE: worker {worker_transaction_device_idx}'s updates is deemed as suspiciously malicious by validator {self.idx}")
 					# is it right?
@@ -1190,7 +1235,7 @@ class Device:
 						print(f"Warning - {worker_transaction_device_idx} is benign and this validation is wrong.")
 						# for experiments
 						with open(f"{log_files_folder_path}/false_negative_good_nodes_inside_victims.txt", 'a') as file:
-							file.write(f"{current_accuracy - accuracy_by_worker_update_using_own_data} = current_validator_accuracy {current_accuracy} - accuracy_by_worker_update_using_own_data {accuracy_by_worker_update_using_own_data} , by worker {worker_transaction_device_idx} in round {comm_round}\n")
+							file.write(f"{self.validator_local_accuracy - accuracy_by_worker_update_using_own_data} = current_validator_accuracy {self.validator_local_accuracy} - accuracy_by_worker_update_using_own_data {accuracy_by_worker_update_using_own_data} , by worker {worker_transaction_device_idx} in round {comm_round}\n")
 				else:
 					transaction_to_validate['update_direction'] = True
 					print(f"worker {worker_transaction_device_idx}'s' updates is deemed as GOOD by validator {self.idx}")
@@ -1199,7 +1244,7 @@ class Device:
 						print(f"Warning - {worker_transaction_device_idx} is malicious and this validation is wrong.")
 						# for experiments
 						with open(f"{log_files_folder_path}/false_positive_malious_nodes_inside_slipped.txt", 'a') as file:
-							file.write(f"{current_accuracy - accuracy_by_worker_update_using_own_data} = current_validator_accuracy {current_accuracy} - accuracy_by_worker_update_using_own_data {accuracy_by_worker_update_using_own_data} , by worker {worker_transaction_device_idx} in round {comm_round}\n")
+							file.write(f"{self.validator_local_accuracy - accuracy_by_worker_update_using_own_data} = current_validator_accuracy {self.validator_local_accuracy} - accuracy_by_worker_update_using_own_data {accuracy_by_worker_update_using_own_data} , by worker {worker_transaction_device_idx} in round {comm_round}\n")
 			else:
 				transaction_to_validate['update_direction'] = 'N/A'
 			transaction_to_validate['validation_done_by'] = self.idx
