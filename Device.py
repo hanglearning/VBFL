@@ -1226,7 +1226,7 @@ class Device:
 				# record their accuracies and difference for choosing a good validator threshold
 				with open(f"{log_files_folder_path}/validator_records_comm_{comm_round}.txt", "a") as file:
 					is_malicious_node = "M" if self.devices_dict[worker_transaction_device_idx].return_is_malicious() else "B"
-					file.write(f"diff = {accuracy_by_worker_update_using_own_data - self.validator_local_accuracy}: validator {self.return_idx()} in round {comm_round} evluating worker {worker_transaction_device_idx} {is_malicious_node}, v_acc - {self.validator_local_accuracy}, w_acc - {accuracy_by_worker_update_using_own_data} \n")
+					file.write(f"{accuracy_by_worker_update_using_own_data - self.validator_local_accuracy}: validator {self.return_idx()} in round {comm_round} evluating worker {worker_transaction_device_idx} {is_malicious_node}, diff = v_acc:{self.validator_local_accuracy} - w_acc:{accuracy_by_worker_update_using_own_data} \n")
 				if accuracy_by_worker_update_using_own_data - self.validator_local_accuracy < self.validator_threshold * -1:
 					transaction_to_validate['update_direction'] = False
 					print(f"NOTE: worker {worker_transaction_device_idx}'s updates is deemed as suspiciously malicious by validator {self.idx}")
@@ -1235,10 +1235,10 @@ class Device:
 						print(f"Warning - {worker_transaction_device_idx} is benign and this validation is wrong.")
 						# for experiments
 						with open(f"{log_files_folder_path}/false_negative_good_nodes_inside_victims.txt", 'a') as file:
-							file.write(f"{self.validator_local_accuracy - accuracy_by_worker_update_using_own_data} = current_validator_accuracy {self.validator_local_accuracy} - accuracy_by_worker_update_using_own_data {accuracy_by_worker_update_using_own_data} , by worker {worker_transaction_device_idx} in round {comm_round}\n")
+							file.write(f"{self.validator_local_accuracy - accuracy_by_worker_update_using_own_data} = current_validator_accuracy {self.validator_local_accuracy} - accuracy_by_worker_update_using_own_data {accuracy_by_worker_update_using_own_data} , by validator {self.idx} on worker {worker_transaction_device_idx} in round {comm_round}\n")
 					else:
 						with open(f"{log_files_folder_path}/true_negative_malicious_nodes_inside_caught.txt", 'a') as file:
-							file.write(f"{self.validator_local_accuracy - accuracy_by_worker_update_using_own_data} = current_validator_accuracy {self.validator_local_accuracy} - accuracy_by_worker_update_using_own_data {accuracy_by_worker_update_using_own_data} , by worker {worker_transaction_device_idx} in round {comm_round}\n")
+							file.write(f"{self.validator_local_accuracy - accuracy_by_worker_update_using_own_data} = current_validator_accuracy {self.validator_local_accuracy} - accuracy_by_worker_update_using_own_data {accuracy_by_worker_update_using_own_data} , by validator {self.idx} on worker {worker_transaction_device_idx} in round {comm_round}\n")
 				else:
 					transaction_to_validate['update_direction'] = True
 					print(f"worker {worker_transaction_device_idx}'s' updates is deemed as GOOD by validator {self.idx}")
@@ -1247,10 +1247,10 @@ class Device:
 						print(f"Warning - {worker_transaction_device_idx} is malicious and this validation is wrong.")
 						# for experiments
 						with open(f"{log_files_folder_path}/false_positive_malious_nodes_inside_slipped.txt", 'a') as file:
-							file.write(f"{self.validator_local_accuracy - accuracy_by_worker_update_using_own_data} = current_validator_accuracy {self.validator_local_accuracy} - accuracy_by_worker_update_using_own_data {accuracy_by_worker_update_using_own_data} , by worker {worker_transaction_device_idx} in round {comm_round}\n")
+							file.write(f"{self.validator_local_accuracy - accuracy_by_worker_update_using_own_data} = current_validator_accuracy {self.validator_local_accuracy} - accuracy_by_worker_update_using_own_data {accuracy_by_worker_update_using_own_data} , by validator {self.idx} on worker {worker_transaction_device_idx} in round {comm_round}\n")
 					else:
 						with open(f"{log_files_folder_path}/true_positive_good_nodes_inside_correct.txt", 'a') as file:
-							file.write(f"{self.validator_local_accuracy - accuracy_by_worker_update_using_own_data} = current_validator_accuracy {self.validator_local_accuracy} - accuracy_by_worker_update_using_own_data {accuracy_by_worker_update_using_own_data} , by worker {worker_transaction_device_idx} in round {comm_round}\n")
+							file.write(f"{self.validator_local_accuracy - accuracy_by_worker_update_using_own_data} = current_validator_accuracy {self.validator_local_accuracy} - accuracy_by_worker_update_using_own_data {accuracy_by_worker_update_using_own_data} , by validator {self.idx} on worker {worker_transaction_device_idx} in round {comm_round}\n")
 			else:
 				transaction_to_validate['update_direction'] = 'N/A'
 			transaction_to_validate['validation_done_by'] = self.idx
