@@ -17,7 +17,8 @@
 			"type": "python",
 			"request": "launch",
 			"program": "${workspaceFolder}/WHDY_vanilla_malicious_involved_fedavg/server.py",
-			"console": "integratedTerminal"
+			"console": "integratedTerminal",
+			"args": ["-nc", "20", "-B", "10", "-mn", "mnist_cnn", "-E", "1000", "-iid", "0", "-nm", "3"]
 		},
 		{
 			"name": "plot_graph.py",

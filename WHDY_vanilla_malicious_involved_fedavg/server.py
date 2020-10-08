@@ -46,10 +46,10 @@ if __name__=="__main__":
 		f.write(' '.join(sys.argv[1:]))
 		f.write("\n\nAll arguments used -\n")
 		for arg_name, arg in args.items():
-			f.write(f'--{arg_name} {arg} ')
+			f.write(f'\n--{arg_name} {arg}')
 		
 
-	os.environ['CUDA_VISIBLE_clientS'] = args['gpu']
+	# os.environ['CUDA_VISIBLE_clientS'] = args['gpu']
 	dev = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
 	net = None
@@ -59,7 +59,7 @@ if __name__=="__main__":
 		net = Mnist_CNN()
 
 	if torch.cuda.device_count() > 1:
-		print("Let's use", torch.cuda.client_count(), "GPUs!")
+		print("Let's use", torch.cuda.device_count(), "GPUs!")
 		net = torch.nn.DataParallel(net)
 	net = net.to(dev)
 
