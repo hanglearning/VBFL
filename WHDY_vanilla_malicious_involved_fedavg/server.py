@@ -92,14 +92,14 @@ if __name__=="__main__":
 
 		clients_list = list(myClients.clients_set.values())
 		print(''' Logging Accuracies by clients ''')
-		open(f"{log_files_folder_path}/comm_{i+1}.txt", 'w').close()
+		# open(f"{log_files_folder_path}/comm_{i+1}.txt", 'w').close()
 		for client in clients_list:
 			accuracy_this_round = client.evaluate_model_weights(global_parameters)
-			with open(f"{log_files_folder_path}/comm_{i}.txt", "a") as file:
+			with open(f"{log_files_folder_path}/comm_{i+1}.txt", "a") as file:
 				is_malicious_node = "M" if client.is_malicious else "B"
 				file.write(f"{client.idx} {is_malicious_node}: {accuracy_this_round}\n")
-		# logging time, mining_consensus and forking
+		# logging time
 		comm_round_spent_time = time.time() - comm_round_start_time
-		with open(f"{log_files_folder_path}/comm_{i}.txt", "a") as file:
+		with open(f"{log_files_folder_path}/comm_{i+1}.txt", "a") as file:
 			file.write(f"comm_round_block_gen_time: {comm_round_spent_time}\n")
 
