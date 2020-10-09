@@ -782,6 +782,13 @@ if __name__=="__main__":
 			file.write(f"comm_round_spent_time_on_this_machine: {comm_round_spent_time}")
 		conn.commit()
 
+		# if PoS, log the PoS block miner
+		if mining_consensus == 'PoS':
+			with open(f"{log_files_folder_path}/comm_{comm_round}.txt", "a") as file:
+				PoS_mined_by = verified_block.return_mined_by()
+				is_malicious_node = "M" if devices_in_network.devices_set[PoS_mined_by].return_is_malicious() else "B"
+				file.write(f"PoS_block_mined_by: {verified_block.return_mined_by()} {is_malicious_node}\n")
+
 		# save network_snapshot if reaches save frequency
 		if comm_round == 1 or comm_round % args['save_freq'] == 0:
 			snapshot_file_path = f"{network_snapshot_save_path}/snapshot_r_{comm_round}"

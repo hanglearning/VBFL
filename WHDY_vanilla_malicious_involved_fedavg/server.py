@@ -16,10 +16,10 @@ parser.add_argument('-nc', '--num_of_clients', type=int, default=20, help='numer
 parser.add_argument('-cf', '--cfraction', type=float, default=1, help='C fraction, 0 means 1 client, 1 means total clients')
 parser.add_argument('-E', '--epoch', type=int, default=5, help='local train epoch')
 parser.add_argument('-B', '--batchsize', type=int, default=10, help='local train batch size')
-parser.add_argument('-mn', '--model_name', type=str, default='mnist_2nn', help='the model to train')
+parser.add_argument('-mn', '--model_name', type=str, default='mnist_cnn', help='the model to train')
 parser.add_argument('-lr', "--learning_rate", type=float, default=0.01, help="learning rate, \
 					use value from origin paper as default")
-parser.add_argument('-ncomm', '--num_comm', type=int, default=999999, help='number of communications')
+parser.add_argument('-ncomm', '--num_comm', type=int, default=100, help='number of communications')
 parser.add_argument('-iid', '--IID', type=int, default=0, help='the way to allocate data to clients')
 
 # Hang added
