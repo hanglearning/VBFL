@@ -40,7 +40,7 @@
 			"request": "launch",
 			"program": "${workspaceFolder}/WHDY_vanilla_malicious_involved_fedavg/plot_graph_combine.py",
 			"console": "integratedTerminal",
-			"args": ["/Users/chenhang91/Downloads/WHDY_vanilla_malicious_involved_fedavg/logs/10012020_101250", "/Users/chenhang91/Downloads/WHDY_vanilla_malicious_involved_fedavg/logs/10012020_101320", "/Users/chenhang91/Downloads/12,5,3 Full Dataset PoS no malicious"]
+			"args": ["/Users/chenhang91/TEMP/AAAI draw log/VFL/nm 0/run1", "/Users/chenhang91/TEMP/AAAI draw log/VFL/nm 3/run1"]
 		},
 		{
 			"name": "plot_graph_global_vs_locals.py",
@@ -49,6 +49,22 @@
 			"program": "${workspaceFolder}/plot_graph_global_vs_locals.py",
 			"console": "integratedTerminal",
 			"args": ["/Users/chenhang91/Downloads/014922"]
+		},
+		{
+			"name": "plot_local_model_learning_with_global_VFL.py",
+			"type": "python",
+			"request": "launch",
+			"program": "${workspaceFolder}/plottings/plot_local_model_learning_with_global_VFL.py",
+			"console": "integratedTerminal",
+			"args": ["/Users/chenhang91/TEMP/AAAI draw log/10172020_072705 New VFL"]
+		},
+		{
+			"name": "plot_acc_diff_global_and_local_VFL.py",
+			"type": "python",
+			"request": "launch",
+			"program": "${workspaceFolder}/plottings/plot_acc_diff_global_and_local_VFL.py",
+			"console": "integratedTerminal",
+			"args": ["/Users/chenhang91/TEMP/AAAI draw log/10172020_072705 New VFL"]
 		}
 	]
 }
