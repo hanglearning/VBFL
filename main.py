@@ -284,9 +284,6 @@ if __name__=="__main__":
 			# determine if online at the beginning (essential for step 1 when worker needs to associate with an online device)
 			device.online_switcher()
 
-		''' Create debugging log files '''
-		open(f"{log_files_folder_path}/worker_local_accuracies_comm_{comm_round}.txt", 'w').close()
-
 		''' DEBUGGING CODE '''
 		if args['verbose']:
 
@@ -450,7 +447,7 @@ if __name__=="__main__":
 					if not worker.return_idx() in evaluator.return_black_list():
 						print(f'worker {worker_iter+1}/{len(associated_workers)} of evaluator {evaluator.return_idx()} is doing local updates')	 
 						if worker.online_switcher():
-							local_update_spent_time = worker.worker_local_update(rewards, log_files_folder_path, comm_round, local_epochs=args['default_local_epochs'])
+							local_update_spent_time = worker.worker_local_update(rewards, log_files_folder_path_comm_round, comm_round, local_epochs=args['default_local_epochs'])
 							worker_link_speed = worker.return_link_speed()
 							lower_link_speed = evaluator_link_speed if evaluator_link_speed < worker_link_speed else worker_link_speed
 							unverified_transaction = worker.return_local_updates_and_signature(comm_round)
@@ -775,16 +772,15 @@ if __name__=="__main__":
 				device.other_tasks_at_the_end_of_comm_round(comm_round, log_files_folder_path)
 
 		print(''' Logging Accuracies by Devices ''')
-		open(f"{log_files_folder_path}/comm_{comm_round}.txt", 'w').close()
 		for device in devices_list:
 			accuracy_this_round = device.evaluate_model_weights()
-			with open(f"{log_files_folder_path}/accuracy_comm_{comm_round}.txt", "a") as file:
+			with open(f"{log_files_folder_path_comm_round}/accuracy_comm_{comm_round}.txt", "a") as file:
 				is_malicious_node = "M" if device.return_is_malicious() else "B"
 				file.write(f"{device.return_idx()} {device.return_role()} {is_malicious_node}: {accuracy_this_round}\n")
 
 		# logging time, mining_consensus and forking
 		comm_round_spent_time = time.time() - comm_round_start_time
-		with open(f"{log_files_folder_path}/accuracy_comm_{comm_round}.txt", "a") as file:
+		with open(f"{log_files_folder_path_comm_round}/accuracy_comm_{comm_round}.txt", "a") as file:
 			file.write(f"comm_round_block_gen_time: {comm_round_block_gen_time}\n")
 			file.write(f"mining_consensus: {mining_consensus} {args['pow_difficulty']}\n")
 			file.write(f"forking_happened: {forking_happened}\n")
@@ -792,16 +788,15 @@ if __name__=="__main__":
 		conn.commit()
 
 		print(''' Logging Stake by Devices ''')
-		open(f"{log_files_folder_path}/comm_{comm_round}.txt", 'w').close()
 		for device in devices_list:
 			accuracy_this_round = device.evaluate_model_weights()
-			with open(f"{log_files_folder_path}/stake_comm_{comm_round}.txt", "a") as file:
+			with open(f"{log_files_folder_path_comm_round}/stake_comm_{comm_round}.txt", "a") as file:
 				is_malicious_node = "M" if device.return_is_malicious() else "B"
 				file.write(f"{device.return_idx()} {device.return_role()} {is_malicious_node}: {device.return_stake()}\n")
 				
 		# if PoS, log the PoS block miner
 		if mining_consensus == 'PoS':
-			with open(f"{log_files_folder_path}/stake_comm_{comm_round}.txt", "a") as file:
+			with open(f"{log_files_folder_path_comm_round}/stake_comm_{comm_round}.txt", "a") as file:
 				PoS_mined_by = verified_block.return_mined_by()
 				is_malicious_node = "M" if devices_in_network.devices_set[PoS_mined_by].return_is_malicious() else "B"
 				file.write(f"PoS_block_mined_by: {verified_block.return_mined_by()} {is_malicious_node}\n")

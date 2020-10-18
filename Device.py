@@ -551,19 +551,23 @@ class Device:
 	def kick_out_slow_or_lazy_workers(self, this_comm_round, log_files_folder_path):
 		for device in self.peer_list:
 			if device.return_role() == 'worker':
-				if not device.return_idx() in self.active_worker_record_by_round[this_comm_round]:
-					not_active_accumulator = 1
-					# check if not active for the past (lazy_worker_knock_out_rounds - 1) rounds
-					for comm_round_to_check in range(this_comm_round - self.lazy_worker_knock_out_rounds + 1, this_comm_round):
-						if comm_round_to_check in self.active_worker_record_by_round.keys():
-							if not device.return_idx() in self.active_worker_record_by_round[comm_round_to_check]:
-								not_active_accumulator += 1
-					if not_active_accumulator == self.lazy_worker_knock_out_rounds:
-						# kick out
-						self.black_list.add(device.return_idx())
-						msg = f"worker {device.return_idx()} has been regarded as a lazy worker by {self.idx} in comm_round {this_comm_round}.\n"
-						with open(f"{log_files_folder_path}/kicked_lazy_workers.txt", 'a') as file:
-							file.write(msg)
+				if this_comm_round in self.active_worker_record_by_round.keys():
+					if not device.return_idx() in self.active_worker_record_by_round[this_comm_round]:
+						not_active_accumulator = 1
+						# check if not active for the past (lazy_worker_knock_out_rounds - 1) rounds
+						for comm_round_to_check in range(this_comm_round - self.lazy_worker_knock_out_rounds + 1, this_comm_round):
+							if comm_round_to_check in self.active_worker_record_by_round.keys():
+								if not device.return_idx() in self.active_worker_record_by_round[comm_round_to_check]:
+									not_active_accumulator += 1
+						if not_active_accumulator == self.lazy_worker_knock_out_rounds:
+							# kick out
+							self.black_list.add(device.return_idx())
+							msg = f"worker {device.return_idx()} has been regarded as a lazy worker by {self.idx} in comm_round {this_comm_round}.\n"
+							with open(f"{log_files_folder_path}/kicked_lazy_workers.txt", 'a') as file:
+								file.write(msg)
+				else:
+					# this may happen when a device is put into black list by every worker in a certain comm round
+					pass
 	   
 	def update_model_after_chain_resync(self, log_files_folder_path, conn, conn_cursor):
 		# reset global params to the initial weights of the net
@@ -627,7 +631,7 @@ class Device:
 				self.opti.zero_grad()
 				self.local_updates_rewards_per_transaction += rewards * (label.shape[0])
 			# record accuracies to find good -vh
-			with open(f"{log_files_folder_path_comm_round}/worker_{self.idx}_local_updating_accuracies_comm_{comm_round}.txt", "a") as file:
+			with open(f"{log_files_folder_path_comm_round}/worker_{self.idx}_{is_malicious_node}_local_updating_accuracies_comm_{comm_round}.txt", "a") as file:
 				file.write(f"{self.return_idx()} epoch_{epoch+1} {self.return_role()} {is_malicious_node}: {self.evaluate_model_weights(self.net.state_dict())}\n")
 			self.local_total_epoch += 1
 		# local update done
@@ -1229,9 +1233,10 @@ class Device:
 				print(f'evaluator updated model accuracy - {self.evaluator_local_accuracy}')
 				print(f"After applying worker's update, model accuracy becomes - {accuracy_by_worker_update_using_own_data}")
 				# record their accuracies and difference for choosing a good evaluator threshold
-				with open(f"{log_files_folder_path_comm_round}/evaluator_{self.idx}_evaluation_records_comm_{comm_round}.txt", "a") as file:
+				is_malicious_evaluator = "M" if self.is_malicious else "B"
+				with open(f"{log_files_folder_path_comm_round}/evaluator_{self.idx}_{is_malicious_evaluator}_evaluation_records_comm_{comm_round}.txt", "a") as file:
 					is_malicious_node = "M" if self.devices_dict[worker_transaction_device_idx].return_is_malicious() else "B"
-					file.write(f"{accuracy_by_worker_update_using_own_data - self.evaluator_local_accuracy}: evaluator {self.return_idx()} in round {comm_round} evluating worker {worker_transaction_device_idx} {is_malicious_node}, diff = v_acc:{self.evaluator_local_accuracy} - w_acc:{accuracy_by_worker_update_using_own_data} \n")
+					file.write(f"{accuracy_by_worker_update_using_own_data - self.evaluator_local_accuracy}: evaluator {self.return_idx()} {is_malicious_evaluator} in round {comm_round} evluating worker {worker_transaction_device_idx}, diff = v_acc:{self.evaluator_local_accuracy} - w_acc:{accuracy_by_worker_update_using_own_data} {worker_transaction_device_idx}_maliciousness: {is_malicious_node}\n")
 				if accuracy_by_worker_update_using_own_data - self.evaluator_local_accuracy < self.evaluator_threshold * -1:
 					transaction_to_evaluate['update_direction'] = False
 					print(f"NOTE: worker {worker_transaction_device_idx}'s updates is deemed as suspiciously malicious by evaluator {self.idx}")
