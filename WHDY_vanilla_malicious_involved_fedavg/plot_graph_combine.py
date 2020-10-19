@@ -1,3 +1,5 @@
+# figure 1
+
 import matplotlib.pyplot as plt
 from os import listdir
 import sys
@@ -18,7 +20,8 @@ if log_folder_add:
 
 draw_comm_rounds = len(all_rounds_log_files_b) if len(all_rounds_log_files_b) < len(all_rounds_log_files_m) else len(all_rounds_log_files_m)
 
-draw_comm_rounds = 60
+draw_comm_rounds = 100
+plt.figure(dpi=250)
 
 # get num of devices with their maliciousness
 benign_devices_idx_list = []
@@ -79,19 +82,19 @@ if a_device_accuracies_across_rounds:
 	a_device_accuracies_across_rounds = a_device_accuracies_across_rounds[:draw_comm_rounds]
 
 # draw graphs over all available comm rounds
-plt.xticks(range(draw_comm_rounds), [i for i in range(1, draw_comm_rounds + 1)], rotation=90)
+# plt.xticks(range(draw_comm_rounds), [i for i in range(1, draw_comm_rounds + 1)], rotation=90)
 plt.plot(range(draw_comm_rounds), m_device_accuracies_across_rounds, label=f'{total_malicious_devices}/{total_devices} malicious devices global accuracy')
 plt.plot(range(draw_comm_rounds), b_device_accuracies_across_rounds, label=f'all {total_devices} normal devices global accuracy')
 #plt.plot(range(draw_comm_rounds), a_device_accuracies_across_rounds, label=f'all {total_devices} benigh PoS')
 
 if b_device_accuracies_across_rounds:
-	annotating_points = 20
+	annotating_points = 5
 	for accuracy_iter in range(len(b_device_accuracies_across_rounds)):
 		if not accuracy_iter % (len(b_device_accuracies_across_rounds) // annotating_points):
 			plt.annotate(b_device_accuracies_across_rounds[accuracy_iter], xy=(accuracy_iter, b_device_accuracies_across_rounds[accuracy_iter]), size=12)
 
 if m_device_accuracies_across_rounds:
-	annotating_points = 20
+	annotating_points = 5
 	for accuracy_iter in range(len(m_device_accuracies_across_rounds)):
 		if not accuracy_iter % (len(m_device_accuracies_across_rounds) // annotating_points):
 			plt.annotate(m_device_accuracies_across_rounds[accuracy_iter], xy=(accuracy_iter, m_device_accuracies_across_rounds[accuracy_iter]), size=12)
@@ -106,6 +109,7 @@ if a_device_accuracies_across_rounds:
 plt.legend(loc='best')
 plt.xlabel('Communication Rounds')
 plt.ylabel('Accuracies Across Communication Rounds')
-plt.title('Global Model Accuracies Comparison Before and After Introducing Noices through Vanilla FedAvg Communication Rounds On MNIST Dataset Using MNIST_CNN')
+plt.title('Global Model Accuracies Comparison')
+# plt.title('Global Model Accuracies Comparison Before and After Introducing Noices through Vanilla FedAvg Communication Rounds On MNIST Dataset Using MNIST_CNN')
 plt.show()
 print()

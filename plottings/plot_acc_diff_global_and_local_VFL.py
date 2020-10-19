@@ -1,3 +1,5 @@
+# figure 3
+
 import matplotlib.pyplot as plt
 import os
 import sys
@@ -10,7 +12,7 @@ all_rounds_log_folders = sorted([f for f in os.listdir(log_folder) if f.startswi
 
 draw_comm_rounds = len(all_rounds_log_folders)
 
-draw_comm_rounds = 20
+draw_comm_rounds = 100
 draw_device_idx = 'client_1'
 
 local_accuracies_e1 = []
@@ -46,6 +48,8 @@ x_axis_labels = []
 for i in range(len(le5_minus_g)):
 	x_axis_labels.append(f'R_{i+2}')
 
+plt.figure(dpi=250)
+
 # draw graphs over all available comm rounds
 plt.xticks(range(len(x_axis_labels)), x_axis_labels, rotation=90)
 # draw the whole learning curve
@@ -59,16 +63,16 @@ plt.plot(range(len(x_axis_labels)), le5_minus_g, label=f'{draw_device_idx} minus
 #plt.plot(x_axis_gs, global_accuracies, label=f'{draw_device_idx} global learning curve')
 
 # annotate
-annotations = []
-for x, y, acc in zip(range(len(x_axis_labels)), le5_minus_g, le5_minus_g):
-	annotations.append(plt.text(x,y,acc))
+# annotations = []
+# for x, y, acc in zip(range(len(x_axis_labels)), le5_minus_g, le5_minus_g):
+# 	annotations.append(plt.text(x,y,acc))
 
 
-adjust_text(annotations, only_move={'points':'y', 'texts':'y'}, arrowprops=dict(arrowstyle="->", color='r', lw=0.5))
+# adjust_text(annotations, only_move={'points':'y', 'texts':'y'}, arrowprops=dict(arrowstyle="->", color='r', lw=0.5))
 
-# for draw_acc_iter in range(len(x_axis_labels)):
-# 	draw_acc = le5_minus_g[draw_acc_iter]
-# 	plt.annotate(draw_acc, xy=(draw_acc_iter, draw_acc), size=13)
+for draw_acc_iter in range(len(x_axis_labels)):
+	draw_acc = le5_minus_g[draw_acc_iter]
+	plt.annotate(draw_acc, xy=(draw_acc_iter, draw_acc), size=13)
 
 plt.legend(loc='best')
 plt.title("A Random Device's Continuous Learning Curve in Vanilla FL Using FedAvg")
