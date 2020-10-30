@@ -17,7 +17,7 @@ from Models import Mnist_2NN, Mnist_CNN
 from Blockchain import Blockchain
 
 class Device:
-	def __init__(self, idx, assigned_train_ds, assigned_test_dl, local_batch_size, learning_rate, loss_func, opti, network_stability, net, dev, miner_acception_wait_time, miner_accepted_transactions_size_limit, evaluator_threshold, pow_difficulty, even_link_speed_strength, base_data_transmission_speed, even_computation_power, is_malicious, malicious_updates_discount, knock_out_rounds, lazy_worker_knock_out_rounds):
+	def __init__(self, idx, assigned_train_ds, assigned_test_dl, local_batch_size, learning_rate, loss_func, opti, network_stability, net, dev, miner_acception_wait_time, miner_accepted_transactions_size_limit, validator_threshold, pow_difficulty, even_link_speed_strength, base_data_transmission_speed, even_computation_power, is_malicious, malicious_updates_discount, knock_out_rounds, lazy_worker_knock_out_rounds):
 		self.idx = idx
 		self.train_ds = assigned_train_ds
 		self.test_dl = assigned_test_dl
@@ -46,7 +46,7 @@ class Device:
 		''' simulating hardware equipment strength, such as good processors and RAM capacity. Following recorded times will be shrunk by this value of times
 		# for workers, its update time
 		# for miners, its PoW time
-		# for evaluators, its evaluation time
+		# for validators, its validation time
 		# might be able to simulate molopoly on computation power when there are block size limit, as faster devices' transactions will be accepted and verified first
 		'''
 		if even_computation_power:
@@ -74,45 +74,45 @@ class Device:
 		# used to identify slow or lazy workers
 		self.active_worker_record_by_round = {}
 		self.untrustworthy_workers_record_by_comm_round = {}
-		self.untrustworthy_evaluators_record_by_comm_round = {}
+		self.untrustworthy_validators_record_by_comm_round = {}
 		# self.untrustworthy_miners = {} just drop the block, as later when resync, tho untrustworthy by this paticular, have to agree to most
 		''' For workers '''
 		self.local_updates_rewards_per_transaction = 0
 		self.received_block_from_miner = None
 		self.accuracy_this_round = float('-inf')
-		self.worker_associated_evaluator = None
+		self.worker_associated_validator = None
 		self.worker_associated_miner = None
 		self.local_update_time = None
 		self.local_total_epoch = 0
 		''' For miners '''
 		self.miner_associated_worker_set = set()
-		self.miner_associated_evaluator_set = set()
+		self.miner_associated_validator_set = set()
 		# dict cannot be added to set()
 		self.unconfirmmed_transactions = None or []
 		self.broadcasted_transactions = None or []
 		self.mined_block = None
 		self.received_propagated_block = None
-		self.received_propagated_evaluator_block = None
+		self.received_propagated_validator_block = None
 		self.miner_acception_wait_time = miner_acception_wait_time
 		self.miner_accepted_transactions_size_limit = miner_accepted_transactions_size_limit
-		# when miner directly accepts evaluators' updates
-		self.unordered_arrival_time_accepted_evaluator_transactions = {}
-		self.miner_accepted_broadcasted_evaluator_transactions = None or []
+		# when miner directly accepts validators' updates
+		self.unordered_arrival_time_accepted_validator_transactions = {}
+		self.miner_accepted_broadcasted_validator_transactions = None or []
 		self.final_candidate_transactions_queue_to_mine = {}
 		self.block_generation_time_point = None
 		self.unordered_propagated_block_processing_queue = {} # pure simulation queue and does not exist in real distributed system
-		''' For evaluators '''
-		self.evaluator_associated_worker_set = set()
-		self.evaluation_rewards_this_round = 0
+		''' For validators '''
+		self.validator_associated_worker_set = set()
+		self.validation_rewards_this_round = 0
 		self.accuracies_this_round = {}
-		self.evaluator_associated_miner = None
-		# when evaluator directly accepts workers' updates
+		self.validator_associated_miner = None
+		# when validator directly accepts workers' updates
 		self.unordered_arrival_time_accepted_worker_transactions = {}
-		self.evaluator_accepted_broadcasted_worker_transactions = None or []
-		self.final_transactions_queue_to_evaluate = {}
-		self.post_evaluation_transactions_queue = None or []
-		self.evaluator_threshold = evaluator_threshold
-		self.evaluator_local_accuracy = None
+		self.validator_accepted_broadcasted_worker_transactions = None or []
+		self.final_transactions_queue_to_validate = {}
+		self.post_validation_transactions_queue = None or []
+		self.validator_threshold = validator_threshold
+		self.validator_local_accuracy = None
 		
 		
 
@@ -166,7 +166,7 @@ class Device:
 		elif role_choice == 1:
 			self.role = "miner"
 		else:
-			self.role = "evaluator"
+			self.role = "validator"
 
 	# used for hard_assign
 	def assign_miner_role(self):
@@ -175,8 +175,8 @@ class Device:
 	def assign_worker_role(self):
 		self.role = "worker"
 
-	def assign_evaluator_role(self):
-		self.role = "evaluator"   
+	def assign_validator_role(self):
+		self.role = "validator"   
 		
 	def return_role(self):
 		return self.role
@@ -390,20 +390,20 @@ class Device:
 		if block_to_process:
 			mined_by = block_to_process.return_mined_by()
 			if mined_by in self.black_list:
-				# in this system black list is also consistent across devices as it is calculated based on the information on chain, but individual device can decide its own evaluation/verification mechanisms and has its own 
+				# in this system black list is also consistent across devices as it is calculated based on the information on chain, but individual device can decide its own validation/verification mechanisms and has its own 
 				print(f"The added block is mined by miner {block_to_process.return_mined_by()}, which is in this device's black list. Block will not be processed.")
 			else:
-				# process evaluator sig valid transactions
+				# process validator sig valid transactions
 				# used to count positive and negative transactions worker by worker, select the transaction to do global update and identify potential malicious worker
 				self_rewards_accumulator = 0
 				valid_transactions_records_by_worker = {}
-				valid_evaluator_sig_worker_transacitons_in_block = block_to_process.return_transactions()['valid_evaluator_sig_transacitons']
+				valid_validator_sig_worker_transacitons_in_block = block_to_process.return_transactions()['valid_validator_sig_transacitons']
 				comm_round = block_to_process.return_block_idx()
 				self.active_worker_record_by_round[comm_round] = set()
-				for valid_evaluator_sig_worker_transaciton in valid_evaluator_sig_worker_transacitons_in_block:
+				for valid_validator_sig_worker_transaciton in valid_validator_sig_worker_transacitons_in_block:
 					# verify miner's signature(miner does not get reward for receiving and aggregating)
-					if self.verify_miner_transaction_by_signature(valid_evaluator_sig_worker_transaciton, mined_by):
-						worker_device_idx = valid_evaluator_sig_worker_transaciton['worker_device_idx']
+					if self.verify_miner_transaction_by_signature(valid_validator_sig_worker_transaciton, mined_by):
+						worker_device_idx = valid_validator_sig_worker_transaciton['worker_device_idx']
 						self.active_worker_record_by_round[comm_round].add(worker_device_idx)
 						if not worker_device_idx in valid_transactions_records_by_worker.keys():
 							valid_transactions_records_by_worker[worker_device_idx] = {}
@@ -412,19 +412,19 @@ class Device:
 							valid_transactions_records_by_worker[worker_device_idx]['all_valid_epochs'] = set()
 							valid_transactions_records_by_worker[worker_device_idx]['finally_used_params'] = None
 						# epoch of this worker's local update
-						local_epoch_seq = valid_evaluator_sig_worker_transaciton['local_total_accumulated_epochs_this_round']
-						positive_direction_evaluators = valid_evaluator_sig_worker_transaciton['positive_direction_evaluators']
-						negative_direction_evaluators = valid_evaluator_sig_worker_transaciton['negative_direction_evaluators']
-						if len(positive_direction_evaluators) >= len(negative_direction_evaluators):
+						local_epoch_seq = valid_validator_sig_worker_transaciton['local_total_accumulated_epochs_this_round']
+						positive_direction_validators = valid_validator_sig_worker_transaciton['positive_direction_validators']
+						negative_direction_validators = valid_validator_sig_worker_transaciton['negative_direction_validators']
+						if len(positive_direction_validators) >= len(negative_direction_validators):
 							# worker transaction can be used
 							valid_transactions_records_by_worker[worker_device_idx]['positive_epochs'].add(local_epoch_seq)
 							valid_transactions_records_by_worker[worker_device_idx]['all_valid_epochs'].add(local_epoch_seq)
 							# see if this is the latest epoch from this worker
 							if local_epoch_seq == max(valid_transactions_records_by_worker[worker_device_idx]['all_valid_epochs']):
-								valid_transactions_records_by_worker[worker_device_idx]['finally_used_params'] = valid_evaluator_sig_worker_transaciton['local_updates_params']
+								valid_transactions_records_by_worker[worker_device_idx]['finally_used_params'] = valid_validator_sig_worker_transaciton['local_updates_params']
 							# give rewards to this worker
 							if self.idx == worker_device_idx:
-								self_rewards_accumulator += valid_evaluator_sig_worker_transaciton['local_updates_rewards']
+								self_rewards_accumulator += valid_validator_sig_worker_transaciton['local_updates_rewards']
 						else:
 							if self.malicious_updates_discount:
 								# worker transaction voted negative and has to be applied for a discount
@@ -433,25 +433,25 @@ class Device:
 								# see if this is the latest epoch from this worker
 								if local_epoch_seq == max(valid_transactions_records_by_worker[worker_device_idx]['all_valid_epochs']):
 									# apply discount
-									discounted_valid_evaluator_sig_worker_transaciton_local_updates_params = copy.deepcopy(valid_evaluator_sig_worker_transaciton['local_updates_params'])
-									for var in discounted_valid_evaluator_sig_worker_transaciton_local_updates_params:
-										discounted_valid_evaluator_sig_worker_transaciton_local_updates_params[var] *= self.malicious_updates_discount
-									valid_transactions_records_by_worker[worker_device_idx]['finally_used_params'] = discounted_valid_evaluator_sig_worker_transaciton_local_updates_params
+									discounted_valid_validator_sig_worker_transaciton_local_updates_params = copy.deepcopy(valid_validator_sig_worker_transaciton['local_updates_params'])
+									for var in discounted_valid_validator_sig_worker_transaciton_local_updates_params:
+										discounted_valid_validator_sig_worker_transaciton_local_updates_params[var] *= self.malicious_updates_discount
+									valid_transactions_records_by_worker[worker_device_idx]['finally_used_params'] = discounted_valid_validator_sig_worker_transaciton_local_updates_params
 								# worker receive discounted rewards for negative update
 								if self.idx == worker_device_idx:
-									self_rewards_accumulator += valid_evaluator_sig_worker_transaciton['local_updates_rewards'] * self.malicious_updates_discount
+									self_rewards_accumulator += valid_validator_sig_worker_transaciton['local_updates_rewards'] * self.malicious_updates_discount
 							else:
 								# discount specified as 0, worker transaction voted negative and cannot be used
 								valid_transactions_records_by_worker[worker_device_idx]['negative_epochs'].add(local_epoch_seq)
 								# worker does not receive rewards for negative update
-						# give rewards to evaluators and the miner in this transaction
-						for evaluator_record in positive_direction_evaluators + negative_direction_evaluators:
-							if self.idx == evaluator_record['evaluator']:
-								self_rewards_accumulator += evaluator_record['evaluation_rewards']
-							if self.idx == evaluator_record['miner_device_idx']:
-								self_rewards_accumulator += evaluator_record['miner_rewards_for_this_tx']
+						# give rewards to validators and the miner in this transaction
+						for validator_record in positive_direction_validators + negative_direction_validators:
+							if self.idx == validator_record['validator']:
+								self_rewards_accumulator += validator_record['validation_rewards']
+							if self.idx == validator_record['miner_device_idx']:
+								self_rewards_accumulator += validator_record['miner_rewards_for_this_tx']
 					else:
-						print(f"one evaluator transaction miner sig found invalid in this block. {self.idx} will drop this block and roll back rewards information")
+						print(f"one validator transaction miner sig found invalid in this block. {self.idx} will drop this block and roll back rewards information")
 						return
 				
 				# identify potentially malicious worker
@@ -489,45 +489,45 @@ class Device:
 						   
 							# cont = print("Press ENTER to continue")
 				
-				# identify potentially compromised evaluator
-				self.untrustworthy_evaluators_record_by_comm_round[comm_round] = set()
-				invalid_evaluator_sig_worker_transacitons_in_block = block_to_process.return_transactions()['invalid_evaluator_sig_transacitons']
-				for invalid_evaluator_sig_worker_transaciton in invalid_evaluator_sig_worker_transacitons_in_block:
-					if self.verify_miner_transaction_by_signature(invalid_evaluator_sig_worker_transaciton, mined_by):
-						evaluator_device_idx = invalid_evaluator_sig_worker_transaciton['evaluator']
-						self.untrustworthy_evaluators_record_by_comm_round[comm_round].add(evaluator_device_idx)
+				# identify potentially compromised validator
+				self.untrustworthy_validators_record_by_comm_round[comm_round] = set()
+				invalid_validator_sig_worker_transacitons_in_block = block_to_process.return_transactions()['invalid_validator_sig_transacitons']
+				for invalid_validator_sig_worker_transaciton in invalid_validator_sig_worker_transacitons_in_block:
+					if self.verify_miner_transaction_by_signature(invalid_validator_sig_worker_transaciton, mined_by):
+						validator_device_idx = invalid_validator_sig_worker_transaciton['validator']
+						self.untrustworthy_validators_record_by_comm_round[comm_round].add(validator_device_idx)
 						kick_out_accumulator = 1
 						# check previous rounds
 						for comm_round_to_check in range(comm_round - self.knock_out_rounds + 1, comm_round):
-							if comm_round_to_check in self.untrustworthy_evaluators_record_by_comm_round.keys():
-								if evaluator_device_idx in self.untrustworthy_evaluators_record_by_comm_round[comm_round_to_check]:
+							if comm_round_to_check in self.untrustworthy_validators_record_by_comm_round.keys():
+								if validator_device_idx in self.untrustworthy_validators_record_by_comm_round[comm_round_to_check]:
 									kick_out_accumulator += 1
 						if kick_out_accumulator == self.knock_out_rounds:
 							# kick out
-							self.black_list.add(evaluator_device_idx)
-							print(f"{evaluator_device_idx} has been regarded as a compromised evaluator by {self.idx} in {comm_round}.")
-							# actually, we did not let evaluator do malicious thing if is_malicious=1 is set to this device. In the submission of 2020/10, we only focus on catching malicious worker
+							self.black_list.add(validator_device_idx)
+							print(f"{validator_device_idx} has been regarded as a compromised validator by {self.idx} in {comm_round}.")
+							# actually, we did not let validator do malicious thing if is_malicious=1 is set to this device. In the submission of 2020/10, we only focus on catching malicious worker
 							# is it right?
 							# if when_resync:
 							#	 msg_end = " when resyncing!\n"
 							# else:
 							#	 msg_end = "!\n"
-							# if self.devices_dict[evaluator_device_idx].return_is_malicious():
-							#	 msg = f"{self.idx} has successfully identified a compromised evaluator device {evaluator_device_idx} in comm_round {comm_round}{msg_end}"
-							#	 with open(f"{log_files_folder_path}/correctly_kicked_evaluators.txt", 'a') as file:
+							# if self.devices_dict[validator_device_idx].return_is_malicious():
+							#	 msg = f"{self.idx} has successfully identified a compromised validator device {validator_device_idx} in comm_round {comm_round}{msg_end}"
+							#	 with open(f"{log_files_folder_path}/correctly_kicked_validators.txt", 'a') as file:
 							#		 file.write(msg)
 							# else:
-							#	 msg = f"WARNING: {self.idx} has mistakenly regard {evaluator_device_idx} as a compromised evaluator device in comm_round {comm_round}{msg_end}"
-							#	 with open(f"{log_files_folder_path}/mistakenly_kicked_evaluators.txt", 'a') as file:
+							#	 msg = f"WARNING: {self.idx} has mistakenly regard {validator_device_idx} as a compromised validator device in comm_round {comm_round}{msg_end}"
+							#	 with open(f"{log_files_folder_path}/mistakenly_kicked_validators.txt", 'a') as file:
 							#		 file.write(msg)
 							# print(msg)
 							# cont = print("Press ENTER to continue")
 					else:
-						print(f"one evaluator transaction miner sig found invalid in this block. {self.idx} will drop this block and roll back rewards information")
+						print(f"one validator transaction miner sig found invalid in this block. {self.idx} will drop this block and roll back rewards information")
 						return
 					# give rewards to the miner in this transaction
-					if self.idx == invalid_evaluator_sig_worker_transaciton['miner_device_idx']:
-						self_rewards_accumulator += invalid_evaluator_sig_worker_transaciton['miner_rewards_for_this_tx']
+					if self.idx == invalid_validator_sig_worker_transaciton['miner_device_idx']:
+						self_rewards_accumulator += invalid_validator_sig_worker_transaciton['miner_rewards_for_this_tx']
 				# miner gets mining rewards
 				if self.idx == mined_by:
 					self_rewards_accumulator += block_to_process.return_mining_rewards()
@@ -617,7 +617,7 @@ class Device:
 		self.net.load_state_dict(self.global_parameters, strict=True)
 		self.local_update_time = time.time()
 		# local worker update by specified epochs
-		# usually, if evaluator acception time is specified, local_epochs should be 1
+		# usually, if validator acception time is specified, local_epochs should be 1
 		# logging maliciousness
 		is_malicious_node = "M" if self.return_is_malicious() else "B"
 		self.local_updates_rewards_per_transaction = 0
@@ -632,7 +632,7 @@ class Device:
 				self.local_updates_rewards_per_transaction += rewards * (label.shape[0])
 			# record accuracies to find good -vh
 			with open(f"{log_files_folder_path_comm_round}/worker_{self.idx}_{is_malicious_node}_local_updating_accuracies_comm_{comm_round}.txt", "a") as file:
-				file.write(f"{self.return_idx()} epoch_{epoch+1} {self.return_role()} {is_malicious_node}: {self.evaluate_model_weights(self.net.state_dict())}\n")
+				file.write(f"{self.return_idx()} epoch_{epoch+1} {self.return_role()} {is_malicious_node}: {self.validate_model_weights(self.net.state_dict())}\n")
 			self.local_total_epoch += 1
 		# local update done
 		try:
@@ -644,32 +644,32 @@ class Device:
 			print(f"malicious worker {self.idx} has added noise to its local updated weights before transmitting")
 		# record accuracies to find good -vh
 		with open(f"{log_files_folder_path_comm_round}/worker_final_local_accuracies_comm_{comm_round}.txt", "a") as file:
-			file.write(f"{self.return_idx()} {self.return_role()} {is_malicious_node}: {self.evaluate_model_weights(self.net.state_dict())}\n")
+			file.write(f"{self.return_idx()} {self.return_role()} {is_malicious_node}: {self.validate_model_weights(self.net.state_dict())}\n")
 		print(f"Done {local_epochs} epoch(s) and total {self.local_total_epoch} epochs")
 		self.local_train_parameters = self.net.state_dict()
 		return self.local_update_time
 
-	# used to simulate time waste when worker goes offline during transmission to evaluator
+	# used to simulate time waste when worker goes offline during transmission to validator
 	def waste_one_epoch_local_update_time(self, opti):
 		if self.computation_power == 0:
 			return float('inf'), None
 		else:
-			evaluation_net = copy.deepcopy(self.net)
+			validation_net = copy.deepcopy(self.net)
 			currently_used_lr = 0.01
 			for param_group in self.opti.param_groups:
 				currently_used_lr = param_group['lr']
 			# by default use SGD. Did not implement others
 			if opti == 'SGD':
-				evaluation_opti = optim.SGD(evaluation_net.parameters(), lr=currently_used_lr)
+				validation_opti = optim.SGD(validation_net.parameters(), lr=currently_used_lr)
 			local_update_time = time.time()
 			for data, label in self.train_dl:
 				data, label = data.to(self.dev), label.to(self.dev)
-				preds = evaluation_net(data)
+				preds = validation_net(data)
 				loss = self.loss_func(preds, label)
 				loss.backward()
-				evaluation_opti.step()
-				evaluation_opti.zero_grad()
-			return (time.time() - local_update_time)/self.computation_power, evaluation_net.state_dict()
+				validation_opti.step()
+				validation_opti.zero_grad()
+			return (time.time() - local_update_time)/self.computation_power, validation_net.state_dict()
 
 	def set_accuracy_this_round(self, accuracy):
 		self.accuracy_this_round = accuracy
@@ -693,7 +693,7 @@ class Device:
 		self.local_updates_rewards_per_transaction = 0
 		self.has_added_block = False
 		self.the_added_block = None
-		self.worker_associated_evaluator = None
+		self.worker_associated_validator = None
 		self.worker_associated_miner = None
 		self.local_update_time = None
 		self.local_total_epoch = 0
@@ -712,7 +712,7 @@ class Device:
 	def return_received_block_from_miner(self):
 		return self.received_block_from_miner
 	
-	def evaluate_model_weights(self, weights_to_eval=None):
+	def validate_model_weights(self, weights_to_eval=None):
 		with torch.no_grad():
 			if weights_to_eval:
 				self.net.load_state_dict(weights_to_eval, strict=True)
@@ -761,7 +761,7 @@ class Device:
 
 	def request_to_download(self, block_to_download, requesting_time_point):
 		print(f"miner {self.idx} is requesting its associated devices to download the block it just added to its chain")
-		devices_in_association = self.miner_associated_evaluator_set.union(self.miner_associated_worker_set)
+		devices_in_association = self.miner_associated_validator_set.union(self.miner_associated_worker_set)
 		for device in devices_in_association:
 			# theoratically, one device is associated to a specific miner, so we don't have a miner_block_arrival_queue here
 			# last step, no need to track time any more
@@ -800,8 +800,8 @@ class Device:
 	def return_unordered_propagated_block_processing_queue(self):
 		return self.unordered_propagated_block_processing_queue
 	
-	def return_associated_evaluators(self):
-		return self.miner_associated_evaluator_set
+	def return_associated_validators(self):
+		return self.miner_associated_validator_set
 
 	def return_miner_acception_wait_time(self):
 		return self.miner_acception_wait_time
@@ -820,20 +820,20 @@ class Device:
 	def return_accepted_broadcasted_transactions(self):
 		return self.broadcasted_transactions
 
-	def verify_evaluator_transaction(self, transaction_to_verify):
+	def verify_validator_transaction(self, transaction_to_verify):
 		if self.computation_power == 0:
 			print(f"miner {self.idx} has computation power 0 and will not be able to verify this transaction in time")
 			return False, None
 		else:
-			transaction_evaluator_idx = transaction_to_verify['evaluation_done_by']
-			if transaction_evaluator_idx in self.black_list:
-				print(f"{transaction_evaluator_idx} is in miner's blacklist. Trasaction won't get verified.")
+			transaction_validator_idx = transaction_to_verify['validation_done_by']
+			if transaction_validator_idx in self.black_list:
+				print(f"{transaction_validator_idx} is in miner's blacklist. Trasaction won't get verified.")
 				return False, None
 			# transaction_before_signed = copy.deepcopy(transaction_to_verify)
-			# del transaction_before_signed["evaluator_signature"]
-			# modulus = transaction_to_verify['evaluator_rsa_pub_key']["modulus"]
-			# pub_key = transaction_to_verify['evaluator_rsa_pub_key']["pub_key"]
-			# signature = transaction_to_verify["evaluator_signature"]
+			# del transaction_before_signed["validator_signature"]
+			# modulus = transaction_to_verify['validator_rsa_pub_key']["modulus"]
+			# pub_key = transaction_to_verify['validator_rsa_pub_key']["pub_key"]
+			# signature = transaction_to_verify["validator_signature"]
 			# # begin verification
 			verification_time = time.time()
 			# # verify
@@ -841,11 +841,11 @@ class Device:
 			# hashFromSignature = pow(signature, pub_key, modulus)
 			#if hash == hashFromSignature:
 			if True:
-				print(f"Signature of transaction from evaluator {transaction_evaluator_idx} is verified by {self.role} {self.idx}!")
+				print(f"Signature of transaction from validator {transaction_validator_idx} is verified by {self.role} {self.idx}!")
 				verification_time = (time.time() - verification_time)/self.computation_power
 				return verification_time, True
 			# else:
-			#	 print(f"Signature invalid. Transaction from evaluator {transaction_evaluator_idx} is NOT verified.")
+			#	 print(f"Signature invalid. Transaction from validator {transaction_validator_idx} is NOT verified.")
 			#	 return (time.time() - verification_time)/self.computation_power, False
 
 	def sign_candidate_transaction(self, candidate_transaction):
@@ -891,24 +891,24 @@ class Device:
 		else:
 			print(f"Propagated block miner {received_propagated_block.return_mined_by()} is in miner {self.idx}'s blacklist. Block not accepted.")
 
-	def receive_propagated_evaluator_block(self, received_propagated_evaluator_block):
-		if not received_propagated_evaluator_block.return_mined_by() in self.black_list:
-			self.received_propagated_evaluator_block = copy.deepcopy(received_propagated_evaluator_block)
-			print(f"Miner {self.idx} has received a propagated evaluator block from {received_propagated_evaluator_block.return_mined_by()}.")
+	def receive_propagated_validator_block(self, received_propagated_validator_block):
+		if not received_propagated_validator_block.return_mined_by() in self.black_list:
+			self.received_propagated_validator_block = copy.deepcopy(received_propagated_validator_block)
+			print(f"Miner {self.idx} has received a propagated validator block from {received_propagated_validator_block.return_mined_by()}.")
 		else:
-			print(f"Propagated evaluator block miner {received_propagated_evaluator_block.return_mined_by()} is in miner {self.idx}'s blacklist. Block not accepted.")
+			print(f"Propagated validator block miner {received_propagated_validator_block.return_mined_by()} is in miner {self.idx}'s blacklist. Block not accepted.")
 	
 	def return_propagated_block(self):
 		return self.received_propagated_block
 
-	def return_propagated_evaluator_block(self):
-		return self.received_propagated_evaluator_block
+	def return_propagated_validator_block(self):
+		return self.received_propagated_validator_block
 		
 	def toss_propagated_block(self):
 		self.received_propagated_block = None
 		
-	def toss_ropagated_evaluator_block(self):
-		self.received_propagated_evaluator_block = None
+	def toss_ropagated_validator_block(self):
+		self.received_propagated_validator_block = None
 
 	# def set_block_to_add(self, block_to_add):
 	#	 self.block_to_add = block_to_add
@@ -918,57 +918,57 @@ class Device:
 	
 	def miner_reset_vars_for_new_round(self):
 		self.miner_associated_worker_set.clear()
-		self.miner_associated_evaluator_set.clear()
+		self.miner_associated_validator_set.clear()
 		self.unconfirmmed_transactions.clear()
 		self.broadcasted_transactions.clear()
-		# self.unconfirmmed_evaluator_transactions.clear()
-		# self.evaluator_accepted_broadcasted_worker_transactions.clear()
+		# self.unconfirmmed_validator_transactions.clear()
+		# self.validator_accepted_broadcasted_worker_transactions.clear()
 		self.mined_block = None
 		self.received_propagated_block = None
-		self.received_propagated_evaluator_block = None
+		self.received_propagated_validator_block = None
 		self.has_added_block = False
 		self.the_added_block = None
-		self.unordered_arrival_time_accepted_evaluator_transactions.clear()
-		self.miner_accepted_broadcasted_evaluator_transactions.clear()
+		self.unordered_arrival_time_accepted_validator_transactions.clear()
+		self.miner_accepted_broadcasted_validator_transactions.clear()
 		self.block_generation_time_point = None
 #		self.block_to_add = None
 		self.unordered_propagated_block_processing_queue.clear()
 	
-	def set_unordered_arrival_time_accepted_evaluator_transactions(self, unordered_arrival_time_accepted_evaluator_transactions):
-		self.unordered_arrival_time_accepted_evaluator_transactions = unordered_arrival_time_accepted_evaluator_transactions
+	def set_unordered_arrival_time_accepted_validator_transactions(self, unordered_arrival_time_accepted_validator_transactions):
+		self.unordered_arrival_time_accepted_validator_transactions = unordered_arrival_time_accepted_validator_transactions
 	
-	def return_unordered_arrival_time_accepted_evaluator_transactions(self):
-		return self.unordered_arrival_time_accepted_evaluator_transactions
-	# def miner_reset_vars_for_new_evaluation_round(self):
+	def return_unordered_arrival_time_accepted_validator_transactions(self):
+		return self.unordered_arrival_time_accepted_validator_transactions
+	# def miner_reset_vars_for_new_validation_round(self):
 	#	 self.unconfirmmed_transactions.clear()
 	#	 self.broadcasted_transactions.clear()
 
-	def miner_broadcast_evaluator_transactions(self):
+	def miner_broadcast_validator_transactions(self):
 		for peer in self.peer_list:
 			if peer.is_online():
 				if peer.return_role() == "miner":
 					if not peer.return_idx() in self.black_list:
-						print(f"miner {self.idx} is broadcasting received evaluator transactions to miner {peer.return_idx()}.")
-						final_broadcasting_unordered_arrival_time_accepted_evaluator_transactions_for_dest_miner = copy.copy(self.unordered_arrival_time_accepted_evaluator_transactions)
-						# offline situation similar in evaluator_broadcast_worker_transactions()
-						for arrival_time, tx in self.unordered_arrival_time_accepted_evaluator_transactions.items():
+						print(f"miner {self.idx} is broadcasting received validator transactions to miner {peer.return_idx()}.")
+						final_broadcasting_unordered_arrival_time_accepted_validator_transactions_for_dest_miner = copy.copy(self.unordered_arrival_time_accepted_validator_transactions)
+						# offline situation similar in validator_broadcast_worker_transactions()
+						for arrival_time, tx in self.unordered_arrival_time_accepted_validator_transactions.items():
 							if not (self.online_switcher() and peer.online_switcher()):
-								del final_broadcasting_unordered_arrival_time_accepted_evaluator_transactions_for_dest_miner[arrival_time]
-						peer.accept_miner_broadcasted_evaluator_transactions(self, final_broadcasting_unordered_arrival_time_accepted_evaluator_transactions_for_dest_miner)
-						print(f"miner {self.idx} has broadcasted {len(final_broadcasting_unordered_arrival_time_accepted_evaluator_transactions_for_dest_miner)} evaluator transactions to miner {peer.return_idx()}.")
+								del final_broadcasting_unordered_arrival_time_accepted_validator_transactions_for_dest_miner[arrival_time]
+						peer.accept_miner_broadcasted_validator_transactions(self, final_broadcasting_unordered_arrival_time_accepted_validator_transactions_for_dest_miner)
+						print(f"miner {self.idx} has broadcasted {len(final_broadcasting_unordered_arrival_time_accepted_validator_transactions_for_dest_miner)} validator transactions to miner {peer.return_idx()}.")
 					else:
 						print(f"Destination miner {peer.return_idx()} is in miner {self.idx}'s black_list. broadcasting skipped for this dest miner.")
 
-	def accept_miner_broadcasted_evaluator_transactions(self, source_device, unordered_transaction_arrival_queue_from_source_miner):
+	def accept_miner_broadcasted_validator_transactions(self, source_device, unordered_transaction_arrival_queue_from_source_miner):
 		# discard malicious node
 		if not source_device.return_idx() in self.black_list:
-			self.miner_accepted_broadcasted_evaluator_transactions.append({'source_device_link_speed': source_device.return_link_speed(),'broadcasted_transactions': copy.deepcopy(unordered_transaction_arrival_queue_from_source_miner)})
-			print(f"{self.role} {self.idx} has accepted evaluator transactions from {source_device.return_role()} {source_device.return_idx()}")
+			self.miner_accepted_broadcasted_validator_transactions.append({'source_device_link_speed': source_device.return_link_speed(),'broadcasted_transactions': copy.deepcopy(unordered_transaction_arrival_queue_from_source_miner)})
+			print(f"{self.role} {self.idx} has accepted validator transactions from {source_device.return_role()} {source_device.return_idx()}")
 		else:
 			print(f"Source miner {source_device.return_role()} {source_device.return_idx()} is in {self.role} {self.idx}'s black list. Broadcasted transactions not accepted.")
 	
-	def return_accepted_broadcasted_evaluator_transactions(self):
-		return self.miner_accepted_broadcasted_evaluator_transactions
+	def return_accepted_broadcasted_validator_transactions(self):
+		return self.miner_accepted_broadcasted_validator_transactions
 
 	def set_candidate_transactions_for_final_mining_queue(self, final_transactions_arrival_queue):
 		self.final_candidate_transactions_queue_to_mine = final_transactions_arrival_queue
@@ -976,27 +976,27 @@ class Device:
 	def return_final_candidate_transactions_mining_queue(self):
 		return self.final_candidate_transactions_queue_to_mine
 
-	''' evaluator '''
-	def evaluator_reset_vars_for_new_round(self):
-		self.evaluation_rewards_this_round = 0
+	''' validator '''
+	def validator_reset_vars_for_new_round(self):
+		self.validation_rewards_this_round = 0
 		# self.accuracies_this_round = {}
 		self.has_added_block = False
 		self.the_added_block = None
-		self.evaluator_associated_miner = None
-		self.evaluator_local_accuracy = None
-		self.evaluator_associated_worker_set.clear()
-		#self.post_evaluation_transactions.clear()
-		#self.broadcasted_post_evaluation_transactions.clear()
+		self.validator_associated_miner = None
+		self.validator_local_accuracy = None
+		self.validator_associated_worker_set.clear()
+		#self.post_validation_transactions.clear()
+		#self.broadcasted_post_validation_transactions.clear()
 		self.unordered_arrival_time_accepted_worker_transactions.clear()
-		self.final_transactions_queue_to_evaluate.clear()
-		self.evaluator_accepted_broadcasted_worker_transactions.clear()
-		self.post_evaluation_transactions_queue.clear()
+		self.final_transactions_queue_to_validate.clear()
+		self.validator_accepted_broadcasted_worker_transactions.clear()
+		self.post_validation_transactions_queue.clear()
 
-	def add_post_evaluation_transaction_to_queue(self, transaction_to_add):
-		self.post_evaluation_transactions_queue.append(transaction_to_add)
+	def add_post_validation_transaction_to_queue(self, transaction_to_add):
+		self.post_validation_transactions_queue.append(transaction_to_add)
 	
-	def return_post_evaluation_transactions_queue(self):
-		return self.post_evaluation_transactions_queue
+	def return_post_validation_transactions_queue(self):
+		return self.post_validation_transactions_queue
 
 	def return_online_workers(self):
 		online_workers_in_peer_list = set()
@@ -1007,9 +1007,9 @@ class Device:
 		return online_workers_in_peer_list
 
 
-	def return_evaluations_and_signature(self, comm_round):
+	def return_validations_and_signature(self, comm_round):
 		#kick_out_device_set = set()
-		#evaluation_effort_rewards = 0
+		#validation_effort_rewards = 0
 		# from more_itertools import split_when
 		# for worker_idx, worker_accuracy in self.worker_accuracy_accross_records.items():
 		#	 decreasing_accuracies = list(split_when(worker_accuracy, lambda x, y: y > x))
@@ -1018,16 +1018,16 @@ class Device:
 		#			 kick_out_device_list.add(worker_idx)
 		#			 break
 		#	 self.receive_rewards(rewards)
-		#	 evaluation_effort_rewards += rewards
-		evaluation_transaction_dict = {'evaluator_device_idx': self.idx, 'round_number': comm_round, 'accuracies_this_round': copy.deepcopy(self.accuracies_this_round), 'evaluation_effort_rewards': self.evaluation_rewards_this_round, "rsa_pub_key": self.return_rsa_pub_key()}
-		evaluation_transaction_dict["signature"] = self.sign_msg(sorted(evaluation_transaction_dict.items()))
-		return evaluation_transaction_dict
+		#	 validation_effort_rewards += rewards
+		validation_transaction_dict = {'validator_device_idx': self.idx, 'round_number': comm_round, 'accuracies_this_round': copy.deepcopy(self.accuracies_this_round), 'validation_effort_rewards': self.validation_rewards_this_round, "rsa_pub_key": self.return_rsa_pub_key()}
+		validation_transaction_dict["signature"] = self.sign_msg(sorted(validation_transaction_dict.items()))
+		return validation_transaction_dict
 
 	def add_worker_to_association(self, worker_device):
 		if not worker_device.return_idx() in self.black_list:
 			self.associated_worker_set.add(worker_device)
 		else:
-			print(f"WARNING: {worker_device.return_idx()} in evaluator {self.idx}'s black list. Not added by the evaluator.")
+			print(f"WARNING: {worker_device.return_idx()} in validator {self.idx}'s black list. Not added by the validator.")
 
 	def associate_with_miner(self):
 		miners_in_peer_list = set()
@@ -1037,13 +1037,13 @@ class Device:
 					miners_in_peer_list.add(peer)
 		if not miners_in_peer_list:
 			return False
-		self.evaluator_associated_miner = random.sample(miners_in_peer_list, 1)[0]
-		return self.evaluator_associated_miner
+		self.validator_associated_miner = random.sample(miners_in_peer_list, 1)[0]
+		return self.validator_associated_miner
 
-	# def return_evaluator_acception_wait_time(self):
-	#	 return self.evaluator_acception_wait_time
+	# def return_validator_acception_wait_time(self):
+	#	 return self.validator_acception_wait_time
 
-	''' miner and evaluator '''
+	''' miner and validator '''
 	def add_device_to_association(self, to_add_device):
 		if not to_add_device.return_idx() in self.black_list:
 			vars(self)[f'{self.role}_associated_{to_add_device.return_role()}_set'].add(to_add_device)
@@ -1084,7 +1084,7 @@ class Device:
 		else:
 			print(f"Source {source_device.return_role()} {source_device.return_idx()} is in {self.role} {self.idx}'s black list. Transaction not accepted.")
 
-	''' worker and evaluator '''
+	''' worker and validator '''
 
 	def set_mined_block(self, mined_block):
 		self.mined_block = mined_block
@@ -1107,19 +1107,19 @@ class Device:
 		print(f"{self.role} {self.idx} associated with {to_associate_device.return_role()} {to_associate_device.return_idx()}")
 		return to_associate_device
 
-	''' evaluator '''
-	# def add_post_evaluation_transaction(self, transaction_to_evaluate, souce_device_idx):
+	''' validator '''
+	# def add_post_validation_transaction(self, transaction_to_validate, souce_device_idx):
 	#	 if not souce_device_idx in self.black_list:
-	#		 self.post_evaluation_transactions.append(copy.deepcopy(transaction_to_evaluate))
+	#		 self.post_validation_transactions.append(copy.deepcopy(transaction_to_validate))
 	#		 print(f"worker {souce_device_idx}'s transaction has been recorded by {self.role} {self.idx}")
 	#	 else:
 	#		 print(f"Source worker {souce_device_idx} is in the black list of {self.role} {self.idx}. Transaction will not be accepted.")
 
-	# def remove_post_evaluation_transaction(self, transaction_to_remove):
-	#	 self.post_evaluation_transactions.remove(transaction_to_remove)
+	# def remove_post_validation_transaction(self, transaction_to_remove):
+	#	 self.post_validation_transactions.remove(transaction_to_remove)
 
-	# def return_post_evaluation_transactions(self):
-	#	 return self.post_evaluation_transactions
+	# def return_post_validation_transactions(self):
+	#	 return self.post_validation_transactions
 
 	def set_unordered_arrival_time_accepted_worker_transactions(self, unordered_transaction_arrival_queue):
 		self.unordered_arrival_time_accepted_worker_transactions = unordered_transaction_arrival_queue
@@ -1127,44 +1127,44 @@ class Device:
 	def return_unordered_arrival_time_accepted_worker_transactions(self):
 		return self.unordered_arrival_time_accepted_worker_transactions
 
-	def evaluator_broadcast_worker_transactions(self):
+	def validator_broadcast_worker_transactions(self):
 		for peer in self.peer_list:
 			if peer.is_online():
-				if peer.return_role() == "evaluator":
+				if peer.return_role() == "validator":
 					if not peer.return_idx() in self.black_list:
-						print(f"evaluator {self.idx} is broadcasting received evaluator transactions to evaluator {peer.return_idx()}.")
-						final_broadcasting_unordered_arrival_time_accepted_worker_transactions_for_dest_evaluator = copy.copy(self.unordered_arrival_time_accepted_worker_transactions)
+						print(f"validator {self.idx} is broadcasting received validator transactions to validator {peer.return_idx()}.")
+						final_broadcasting_unordered_arrival_time_accepted_worker_transactions_for_dest_validator = copy.copy(self.unordered_arrival_time_accepted_worker_transactions)
 						# if offline, it's like the broadcasted transaction was not received, so skip a transaction
 						for arrival_time, tx in self.unordered_arrival_time_accepted_worker_transactions.items():
 							if not (self.online_switcher() and peer.online_switcher()):
-								del final_broadcasting_unordered_arrival_time_accepted_worker_transactions_for_dest_evaluator[arrival_time]
+								del final_broadcasting_unordered_arrival_time_accepted_worker_transactions_for_dest_validator[arrival_time]
 						# in the real distributed system, it should be broadcasting transaction one by one. Here we send the all received transactions(while online) and later calculate the order for the individual broadcasting transaction's arrival time mixed with the transactions itself received
-						peer.accept_evaluator_broadcasted_worker_transactions(self, final_broadcasting_unordered_arrival_time_accepted_worker_transactions_for_dest_evaluator)
-						print(f"evaluator {self.idx} has broadcasted {len(final_broadcasting_unordered_arrival_time_accepted_worker_transactions_for_dest_evaluator)} worker transactions to evaluator {peer.return_idx()}.")
+						peer.accept_validator_broadcasted_worker_transactions(self, final_broadcasting_unordered_arrival_time_accepted_worker_transactions_for_dest_validator)
+						print(f"validator {self.idx} has broadcasted {len(final_broadcasting_unordered_arrival_time_accepted_worker_transactions_for_dest_validator)} worker transactions to validator {peer.return_idx()}.")
 					else:
-						print(f"Destination evaluator {peer.return_idx()} is in this evaluator {self.idx}'s black_list. broadcasting skipped for this dest evaluator.")
+						print(f"Destination validator {peer.return_idx()} is in this validator {self.idx}'s black_list. broadcasting skipped for this dest validator.")
 
-	def accept_evaluator_broadcasted_worker_transactions(self, source_evaluator, unordered_transaction_arrival_queue_from_source_evaluator):
-		if not source_evaluator.return_idx() in self.black_list:
-			self.evaluator_accepted_broadcasted_worker_transactions.append({'source_evaluator_link_speed': source_evaluator.return_link_speed(),'broadcasted_transactions': copy.deepcopy(unordered_transaction_arrival_queue_from_source_evaluator)})
-			print(f"evaluator {self.idx} has accepted worker transactions from evaluator {source_evaluator.return_idx()}")
+	def accept_validator_broadcasted_worker_transactions(self, source_validator, unordered_transaction_arrival_queue_from_source_validator):
+		if not source_validator.return_idx() in self.black_list:
+			self.validator_accepted_broadcasted_worker_transactions.append({'source_validator_link_speed': source_validator.return_link_speed(),'broadcasted_transactions': copy.deepcopy(unordered_transaction_arrival_queue_from_source_validator)})
+			print(f"validator {self.idx} has accepted worker transactions from validator {source_validator.return_idx()}")
 		else:
-			print(f"Source evaluator {source_evaluator.return_idx()} is in evaluator {self.idx}'s black list. Broadcasted transactions not accepted.")
+			print(f"Source validator {source_validator.return_idx()} is in validator {self.idx}'s black list. Broadcasted transactions not accepted.")
 
 	def return_accepted_broadcasted_worker_transactions(self):
-		return self.evaluator_accepted_broadcasted_worker_transactions
+		return self.validator_accepted_broadcasted_worker_transactions
 
 	def set_transaction_for_final_validating_queue(self, final_transactions_arrival_queue):
-		self.final_transactions_queue_to_evaluate = final_transactions_arrival_queue
+		self.final_transactions_queue_to_validate = final_transactions_arrival_queue
 
 	def return_final_transactions_validating_queue(self):
-		return self.final_transactions_queue_to_evaluate
+		return self.final_transactions_queue_to_validate
 
-	def evaluator_update_model_by_one_epoch_and_evaluate_local_accuracy(self, opti):
+	def validator_update_model_by_one_epoch_and_validate_local_accuracy(self, opti):
 		# return time spent
-		print(f"evaluator {self.idx} is performing one epoch of local update and evaluation")
+		print(f"validator {self.idx} is performing one epoch of local update and validation")
 		if self.computation_power == 0:
-			print(f"evaluator {self.idx} has computation power 0 and will not be able to complete this evaluation")
+			print(f"validator {self.idx} has computation power 0 and will not be able to complete this validation")
 			return float('inf')
 		else:
 			updated_net = copy.deepcopy(self.net)
@@ -1173,16 +1173,16 @@ class Device:
 				currently_used_lr = param_group['lr']
 			# by default use SGD. Did not implement others
 			if opti == 'SGD':
-				evaluation_opti = optim.SGD(updated_net.parameters(), lr=currently_used_lr)
-			local_evaluation_time = time.time()
+				validation_opti = optim.SGD(updated_net.parameters(), lr=currently_used_lr)
+			local_validation_time = time.time()
 			for data, label in self.train_dl:
 				data, label = data.to(self.dev), label.to(self.dev)
 				preds = updated_net(data)
 				loss = self.loss_func(preds, label)
 				loss.backward()
-				evaluation_opti.step()
-				evaluation_opti.zero_grad()
-			# evaluate by local test set
+				validation_opti.step()
+				validation_opti.zero_grad()
+			# validate by local test set
 			with torch.no_grad():
 				sum_accu = 0
 				num = 0
@@ -1192,88 +1192,93 @@ class Device:
 					preds = torch.argmax(preds, dim=1)
 					sum_accu += (preds == label).float().mean()
 					num += 1
-			self.evaluator_local_accuracy = sum_accu / num
-			print(f"evaluator {self.idx} locally updated model has accuracy {self.evaluator_local_accuracy} on its local test set")
-			return (time.time() - local_evaluation_time)/self.computation_power
+			self.validator_local_accuracy = sum_accu / num
+			print(f"validator {self.idx} locally updated model has accuracy {self.validator_local_accuracy} on its local test set")
+			return (time.time() - local_validation_time)/self.computation_power
 
-	# TODO evaluator_threshold
-	def evaluate_worker_transaction(self, transaction_to_evaluate, rewards, log_files_folder_path, comm_round):
+	# TODO validator_threshold
+	def validate_worker_transaction(self, transaction_to_validate, rewards, log_files_folder_path, comm_round, malicious_validator_on):
 		log_files_folder_path_comm_round = f"{log_files_folder_path}/comm_{comm_round}"
 		if self.computation_power == 0:
-			print(f"evaluator {self.idx} has computation power 0 and will not be able to evaluate this transaction in time")
+			print(f"validator {self.idx} has computation power 0 and will not be able to validate this transaction in time")
 			return False, False
 		else:
-			worker_transaction_device_idx = transaction_to_evaluate['worker_device_idx']
+			worker_transaction_device_idx = transaction_to_validate['worker_device_idx']
 			if worker_transaction_device_idx in self.black_list:
-				print(f"{worker_transaction_device_idx} is in evaluator's blacklist. Trasaction won't get evaluated.")
+				print(f"{worker_transaction_device_idx} is in validator's blacklist. Trasaction won't get validated.")
 				return False, False
-			# transaction_before_signed = copy.deepcopy(transaction_to_evaluate)
+			# transaction_before_signed = copy.deepcopy(transaction_to_validate)
 			# del transaction_before_signed["worker_signature"]
-			# modulus = transaction_to_evaluate['worker_rsa_pub_key']["modulus"]
-			# pub_key = transaction_to_evaluate['worker_rsa_pub_key']["pub_key"]
-			# signature = transaction_to_evaluate["worker_signature"]
-			# begin evaluation
-			evaluation_time = time.time()
+			# modulus = transaction_to_validate['worker_rsa_pub_key']["modulus"]
+			# pub_key = transaction_to_validate['worker_rsa_pub_key']["pub_key"]
+			# signature = transaction_to_validate["worker_signature"]
+			# begin validation
+			validation_time = time.time()
 			# 1 - verify signature
 			# hash = int.from_bytes(sha256(str(sorted(transaction_before_signed.items())).encode('utf-8')).digest(), byteorder='big')
 			# hashFromSignature = pow(signature, pub_key, modulus)
 			#if hash == hashFromSignature:
 			if True:
-				print(f"Signature of transaction from worker {worker_transaction_device_idx} is verified by evaluator {self.idx}!")
-				transaction_to_evaluate['worker_signature_valid'] = True
+				print(f"Signature of transaction from worker {worker_transaction_device_idx} is verified by validator {self.idx}!")
+				transaction_to_validate['worker_signature_valid'] = True
 			# else:
 			#	 print(f"Signature invalid. Transaction from worker {worker_transaction_device_idx} does NOT pass verification.")
-			#	 # will also add sig not verified transaction due to the evaluator's verification effort and its rewards needs to be recorded in the block
-			#	 transaction_to_evaluate['worker_signature_valid'] = False
-			# 2 - evaluate worker's local_updates_params if worker's signature is valid
-			if transaction_to_evaluate['worker_signature_valid']:
-				# accuracy evaluated by worker's update
-				accuracy_by_worker_update_using_own_data = self.evaluate_model_weights(transaction_to_evaluate["local_updates_params"])
-				# if worker's accuracy larger, or lower but the difference falls within the evaluator threshold value, meaning worker's updated model favors evaluator's dataset, so their updates are in the same direction - True, otherwise False. We do not consider the accuracy gap so far, meaning if worker's update is way too good, it is still fine
-				print(f'evaluator updated model accuracy - {self.evaluator_local_accuracy}')
+			#	 # will also add sig not verified transaction due to the validator's verification effort and its rewards needs to be recorded in the block
+			#	 transaction_to_validate['worker_signature_valid'] = False
+			# 2 - validate worker's local_updates_params if worker's signature is valid
+			if transaction_to_validate['worker_signature_valid']:
+				# accuracy validated by worker's update
+				accuracy_by_worker_update_using_own_data = self.validate_model_weights(transaction_to_validate["local_updates_params"])
+				# if worker's accuracy larger, or lower but the difference falls within the validator threshold value, meaning worker's updated model favors validator's dataset, so their updates are in the same direction - True, otherwise False. We do not consider the accuracy gap so far, meaning if worker's update is way too good, it is still fine
+				print(f'validator updated model accuracy - {self.validator_local_accuracy}')
 				print(f"After applying worker's update, model accuracy becomes - {accuracy_by_worker_update_using_own_data}")
-				# record their accuracies and difference for choosing a good evaluator threshold
-				is_malicious_evaluator = "M" if self.is_malicious else "B"
-				with open(f"{log_files_folder_path_comm_round}/evaluator_{self.idx}_{is_malicious_evaluator}_evaluation_records_comm_{comm_round}.txt", "a") as file:
+				# record their accuracies and difference for choosing a good validator threshold
+				is_malicious_validator = "M" if self.is_malicious else "B"
+				with open(f"{log_files_folder_path_comm_round}/validator_{self.idx}_{is_malicious_validator}_validation_records_comm_{comm_round}.txt", "a") as file:
 					is_malicious_node = "M" if self.devices_dict[worker_transaction_device_idx].return_is_malicious() else "B"
-					file.write(f"{accuracy_by_worker_update_using_own_data - self.evaluator_local_accuracy}: evaluator {self.return_idx()} {is_malicious_evaluator} in round {comm_round} evluating worker {worker_transaction_device_idx}, diff = v_acc:{self.evaluator_local_accuracy} - w_acc:{accuracy_by_worker_update_using_own_data} {worker_transaction_device_idx}_maliciousness: {is_malicious_node}\n")
-				if accuracy_by_worker_update_using_own_data - self.evaluator_local_accuracy < self.evaluator_threshold * -1:
-					transaction_to_evaluate['update_direction'] = False
-					print(f"NOTE: worker {worker_transaction_device_idx}'s updates is deemed as suspiciously malicious by evaluator {self.idx}")
+					file.write(f"{accuracy_by_worker_update_using_own_data - self.validator_local_accuracy}: validator {self.return_idx()} {is_malicious_validator} in round {comm_round} evluating worker {worker_transaction_device_idx}, diff = v_acc:{self.validator_local_accuracy} - w_acc:{accuracy_by_worker_update_using_own_data} {worker_transaction_device_idx}_maliciousness: {is_malicious_node}\n")
+				if accuracy_by_worker_update_using_own_data - self.validator_local_accuracy < self.validator_threshold * -1:
+					transaction_to_validate['update_direction'] = False
+					print(f"NOTE: worker {worker_transaction_device_idx}'s updates is deemed as suspiciously malicious by validator {self.idx}")
 					# is it right?
 					if not self.devices_dict[worker_transaction_device_idx].return_is_malicious():
-						print(f"Warning - {worker_transaction_device_idx} is benign and this evaluation is wrong.")
+						print(f"Warning - {worker_transaction_device_idx} is benign and this validation is wrong.")
 						# for experiments
 						with open(f"{log_files_folder_path}/false_negative_good_nodes_inside_victims.txt", 'a') as file:
-							file.write(f"{self.evaluator_local_accuracy - accuracy_by_worker_update_using_own_data} = current_evaluator_accuracy {self.evaluator_local_accuracy} - accuracy_by_worker_update_using_own_data {accuracy_by_worker_update_using_own_data} , by evaluator {self.idx} on worker {worker_transaction_device_idx} in round {comm_round}\n")
+							file.write(f"{self.validator_local_accuracy - accuracy_by_worker_update_using_own_data} = current_validator_accuracy {self.validator_local_accuracy} - accuracy_by_worker_update_using_own_data {accuracy_by_worker_update_using_own_data} , by validator {self.idx} on worker {worker_transaction_device_idx} in round {comm_round}\n")
 					else:
 						with open(f"{log_files_folder_path}/true_negative_malicious_nodes_inside_caught.txt", 'a') as file:
-							file.write(f"{self.evaluator_local_accuracy - accuracy_by_worker_update_using_own_data} = current_evaluator_accuracy {self.evaluator_local_accuracy} - accuracy_by_worker_update_using_own_data {accuracy_by_worker_update_using_own_data} , by evaluator {self.idx} on worker {worker_transaction_device_idx} in round {comm_round}\n")
+							file.write(f"{self.validator_local_accuracy - accuracy_by_worker_update_using_own_data} = current_validator_accuracy {self.validator_local_accuracy} - accuracy_by_worker_update_using_own_data {accuracy_by_worker_update_using_own_data} , by validator {self.idx} on worker {worker_transaction_device_idx} in round {comm_round}\n")
 				else:
-					transaction_to_evaluate['update_direction'] = True
-					print(f"worker {worker_transaction_device_idx}'s' updates is deemed as GOOD by evaluator {self.idx}")
+					transaction_to_validate['update_direction'] = True
+					print(f"worker {worker_transaction_device_idx}'s' updates is deemed as GOOD by validator {self.idx}")
 					# is it right?
 					if self.devices_dict[worker_transaction_device_idx].return_is_malicious():
-						print(f"Warning - {worker_transaction_device_idx} is malicious and this evaluation is wrong.")
+						print(f"Warning - {worker_transaction_device_idx} is malicious and this validation is wrong.")
 						# for experiments
 						with open(f"{log_files_folder_path}/false_positive_malious_nodes_inside_slipped.txt", 'a') as file:
-							file.write(f"{self.evaluator_local_accuracy - accuracy_by_worker_update_using_own_data} = current_evaluator_accuracy {self.evaluator_local_accuracy} - accuracy_by_worker_update_using_own_data {accuracy_by_worker_update_using_own_data} , by evaluator {self.idx} on worker {worker_transaction_device_idx} in round {comm_round}\n")
+							file.write(f"{self.validator_local_accuracy - accuracy_by_worker_update_using_own_data} = current_validator_accuracy {self.validator_local_accuracy} - accuracy_by_worker_update_using_own_data {accuracy_by_worker_update_using_own_data} , by validator {self.idx} on worker {worker_transaction_device_idx} in round {comm_round}\n")
 					else:
 						with open(f"{log_files_folder_path}/true_positive_good_nodes_inside_correct.txt", 'a') as file:
-							file.write(f"{self.evaluator_local_accuracy - accuracy_by_worker_update_using_own_data} = current_evaluator_accuracy {self.evaluator_local_accuracy} - accuracy_by_worker_update_using_own_data {accuracy_by_worker_update_using_own_data} , by evaluator {self.idx} on worker {worker_transaction_device_idx} in round {comm_round}\n")
+							file.write(f"{self.validator_local_accuracy - accuracy_by_worker_update_using_own_data} = current_validator_accuracy {self.validator_local_accuracy} - accuracy_by_worker_update_using_own_data {accuracy_by_worker_update_using_own_data} , by validator {self.idx} on worker {worker_transaction_device_idx} in round {comm_round}\n")
+				if self.is_malicious and malicious_validator_on:
+					old_voting = transaction_to_validate['update_direction']
+					transaction_to_validate['update_direction'] = not transaction_to_validate['update_direction']
+					with open(f"{log_files_folder_path_comm_round}/malicious_validator_log.txt", 'a') as file:
+						file.write(f"malicious validator {self.idx} has flipped the voting of worker {worker_transaction_device_idx} from {old_voting} to {transaction_to_validate['update_direction']} in round {comm_round}\n")
 			else:
-				transaction_to_evaluate['update_direction'] = 'N/A'
-			transaction_to_evaluate['evaluation_done_by'] = self.idx
-			transaction_to_evaluate['evaluation_rewards'] = rewards
-			evaluation_time = (time.time() - evaluation_time)/self.computation_power
-			transaction_to_evaluate['evaluation_time'] = evaluation_time
-			transaction_to_evaluate['evaluator_rsa_pub_key'] = self.return_rsa_pub_key()
+				transaction_to_validate['update_direction'] = 'N/A'
+			transaction_to_validate['validation_done_by'] = self.idx
+			transaction_to_validate['validation_rewards'] = rewards
+			validation_time = (time.time() - validation_time)/self.computation_power
+			transaction_to_validate['validation_time'] = validation_time
+			transaction_to_validate['validator_rsa_pub_key'] = self.return_rsa_pub_key()
 			# assume signing done in negligible time
-			transaction_to_evaluate["evaluator_signature"] = self.sign_msg(sorted(transaction_to_evaluate.items()))
-			return evaluation_time, transaction_to_evaluate
+			transaction_to_validate["validator_signature"] = self.sign_msg(sorted(transaction_to_validate.items()))
+			return validation_time, transaction_to_validate
 
 class DevicesInNetwork(object):
-	def __init__(self, data_set_name, is_iid, batch_size, learning_rate, loss_func, opti, num_devices, network_stability, net, dev, knock_out_rounds, lazy_worker_knock_out_rounds, shard_test_data, miner_acception_wait_time, miner_accepted_transactions_size_limit, evaluator_threshold, pow_difficulty, even_link_speed_strength, base_data_transmission_speed, even_computation_power, malicious_updates_discount, num_malicious):
+	def __init__(self, data_set_name, is_iid, batch_size, learning_rate, loss_func, opti, num_devices, network_stability, net, dev, knock_out_rounds, lazy_worker_knock_out_rounds, shard_test_data, miner_acception_wait_time, miner_accepted_transactions_size_limit, validator_threshold, pow_difficulty, even_link_speed_strength, base_data_transmission_speed, even_computation_power, malicious_updates_discount, num_malicious):
 		self.data_set_name = data_set_name
 		self.is_iid = is_iid
 		self.batch_size = batch_size
@@ -1295,8 +1300,8 @@ class DevicesInNetwork(object):
 		self.num_malicious = num_malicious
 		self.malicious_updates_discount = malicious_updates_discount
 		# distribute dataset
-		''' evaluator '''
-		self.evaluator_threshold = evaluator_threshold
+		''' validator '''
+		self.validator_threshold = validator_threshold
 		''' miner '''
 		self.miner_acception_wait_time = miner_acception_wait_time
 		self.miner_accepted_transactions_size_limit = miner_accepted_transactions_size_limit
@@ -1362,7 +1367,7 @@ class DevicesInNetwork(object):
 				# add Gussian Noise
 
 			device_idx = f'device_{i+1}'
-			a_device = Device(device_idx, TensorDataset(torch.tensor(local_train_data), torch.tensor(local_train_label)), test_data_loader, self.batch_size, self.learning_rate, self.loss_func, self.opti, self.default_network_stability, self.net, self.dev, self.miner_acception_wait_time, self.miner_accepted_transactions_size_limit, self.evaluator_threshold, self.pow_difficulty, self.even_link_speed_strength, self.base_data_transmission_speed, self.even_computation_power, is_malicious, self.malicious_updates_discount, self.knock_out_rounds, self.lazy_worker_knock_out_rounds)
+			a_device = Device(device_idx, TensorDataset(torch.tensor(local_train_data), torch.tensor(local_train_label)), test_data_loader, self.batch_size, self.learning_rate, self.loss_func, self.opti, self.default_network_stability, self.net, self.dev, self.miner_acception_wait_time, self.miner_accepted_transactions_size_limit, self.validator_threshold, self.pow_difficulty, self.even_link_speed_strength, self.base_data_transmission_speed, self.even_computation_power, is_malicious, self.malicious_updates_discount, self.knock_out_rounds, self.lazy_worker_knock_out_rounds)
 			# device index starts from 1
 			self.devices_set[device_idx] = a_device
 			print(f"Sharding dataset to {device_idx} done.")

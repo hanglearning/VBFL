@@ -54,6 +54,6 @@ for accuracy_iter in range(len(device_global_accuracies_across_rounds_2)):
 plt.legend(loc='best')
 plt.xlabel('Comm Round')
 plt.ylabel('Accuracies Across Comm Rounds')
-plt.title('PoS 3/20 malicious before and after evaluators involved')
+plt.title('PoS 3/20 malicious before and after validators involved')
 plt.show()
 print()

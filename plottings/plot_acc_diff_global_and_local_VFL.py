@@ -1,4 +1,4 @@
-# figure 3
+# figure 
 
 import matplotlib.pyplot as plt
 import os
@@ -75,9 +75,9 @@ for draw_acc_iter in range(len(x_axis_labels)):
 	plt.annotate(draw_acc, xy=(draw_acc_iter, draw_acc), size=13)
 
 plt.legend(loc='best')
-plt.title("A Random Device's Continuous Learning Curve in Vanilla FL Using FedAvg")
+plt.title("A Random Device's Continuous Learning Curve in vanilla FL Using FedAvg")
 plt.xlabel("Checkpoint")
-plt.ylabel("Accuracies Evaluated by The Device's Model At Checkpoint")
+plt.ylabel("Accuracies validated by The Device's Model At Checkpoint")
 
 plt.show()
 print()

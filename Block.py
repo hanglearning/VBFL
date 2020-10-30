@@ -13,8 +13,8 @@ class Block:
 		self._miner_rsa_pub_key = miner_rsa_pub_key
 		self._mined_by = mined_by
 		self._mining_rewards = mining_rewards
-		# evaluator specific
-		# self._is_evaluator_block = is_evaluator_block
+		# validator specific
+		# self._is_validator_block = is_validator_block
 		# the hash of the current block, calculated by compute_hash
 		self._pow_proof = pow_proof
 		self._signature = signature
@@ -62,7 +62,7 @@ class Block:
 
 	def add_verified_transaction(self, transaction):
 		# after verified in cross_verification()
-		# transactions can be both worker' or evaluators' transactions
+		# transactions can be both worker' or validators' transactions
 		self._transactions.append(transaction)
 
 	def set_nonce(self, nonce):
@@ -93,14 +93,6 @@ class Block:
 	# a temporary workaround to free GPU mem by delete txs stored in the blocks. Not good when need to resync chain
 	def free_tx(self):
 		del self._transactions
-		
-
-	# ''' evaluator Specific '''
-	# def is_evaluator_block(self):
-	#	 return self._is_evaluator_block
-
-	# def add_evaluator_transaction(self, evaluator_transaction):
-	#	 self._transactions.append(evaluator_transaction)
 
 
 	

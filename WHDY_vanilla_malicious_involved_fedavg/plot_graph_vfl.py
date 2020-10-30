@@ -54,6 +54,6 @@ for device_idx, accuracy_list in devices_accuracies_across_rounds.items():
 plt.legend(loc='best')
 plt.xlabel('Comm Round')
 plt.ylabel('Accuracies Across Comm Rounds')
-plt.title('Learning Curve through Vanilla FedAvg Comm Rounds')
+plt.title('Learning Curve through vanilla FedAvg Comm Rounds')
 plt.savefig(f"{log_files_folder_path}/learning_curve.png")
 plt.show()

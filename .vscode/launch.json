@@ -35,12 +35,12 @@
 			"console": "integratedTerminal"
 		},
 		{
-			"name": "plot_graph_combine.py",
+			"name": "f1_plot_graph_combine.py",
 			"type": "python",
 			"request": "launch",
-			"program": "${workspaceFolder}/WHDY_vanilla_malicious_involved_fedavg/plot_graph_combine.py",
+			"program": "${workspaceFolder}/WHDY_vanilla_malicious_involved_fedavg/f1_plot_graph_combine.py",
 			"console": "integratedTerminal",
-			"args": ["/Users/chenhang91/TEMP/AAAI draw log/VFL/nm 0/run1", "/Users/chenhang91/TEMP/AAAI draw log/VFL/nm 3/run1"]
+			"args": ["/Volumes/BOOTCAMP/AAAI_plots/VFL_nm0_run1", "/Volumes/BOOTCAMP/AAAI_plots/VFL_nm3_run1"]
 		},
 		{
 			"name": "plot_graph_global_vs_locals.py",
@@ -51,12 +51,28 @@
 			"args": ["/Users/chenhang91/Downloads/014922"]
 		},
 		{
-			"name": "plot_local_model_learning_with_global_VFL.py",
+			"name": "f2_plot_local_model_learning_with_global_VFL.py",
 			"type": "python",
 			"request": "launch",
-			"program": "${workspaceFolder}/plottings/plot_local_model_learning_with_global_VFL.py",
+			"program": "${workspaceFolder}/plottings/f2_plot_local_model_learning_with_global_VFL.py",
 			"console": "integratedTerminal",
 			"args": ["/Users/chenhang91/TEMP/AAAI draw log/10172020_072705 New VFL"]
+		},
+		{
+			"name": "f3_plot_local_model_learning_with_global_VFL_combine_malicious.py",
+			"type": "python",
+			"request": "launch",
+			"program": "${workspaceFolder}/plottings/f3_plot_local_model_learning_with_global_VFL_combine_malicious.py",
+			"console": "integratedTerminal",
+			"args": ["/Users/chenhang91/TEMP/AAAI draw log/10202020_055020 VFL with Noisy Acc"]
+		},
+		{
+			"name": "f4_f5_plot_acc_diff_local_normal_vs_malicious_VFL.py",
+			"type": "python",
+			"request": "launch",
+			"program": "${workspaceFolder}/plottings/f4_f5_plot_acc_diff_local_normal_vs_malicious_VFL.py",
+			"console": "integratedTerminal",
+			"args": ["/Users/chenhang91/TEMP/AAAI draw log/10202020_055020 VFL with Noisy Acc"]
 		},
 		{
 			"name": "plot_acc_diff_global_and_local_VFL.py",
@@ -65,6 +81,54 @@
 			"program": "${workspaceFolder}/plottings/plot_acc_diff_global_and_local_VFL.py",
 			"console": "integratedTerminal",
 			"args": ["/Users/chenhang91/TEMP/AAAI draw log/10172020_072705 New VFL"]
+		},
+		{
+			"name": "f7_f8_plot_vfl_pos_vh_all.py",
+			"type": "python",
+			"request": "launch",
+			"program": "${workspaceFolder}/plottings/f7_f8_plot_vfl_pos_vh_all.py",
+			"console": "integratedTerminal",
+			"args": ["/Volumes/BOOTCAMP/AAAI_plots/VFL_nm0_run1", "/Volumes/BOOTCAMP/AAAI_plots/VFL_nm3_run1", "/Volumes/BOOTCAMP/AAAI_plots/PoS_0_20_vh=1_run1", "/Volumes/BOOTCAMP/AAAI_plots/PoS_0_20_vh=0.08_run3", "/Volumes/BOOTCAMP/AAAI_plots/PoS_3_20_vh=0.08/run1", "/Volumes/BOOTCAMP/AAAI_plots/PoS_3_20_vh=0.08/run2", "/Volumes/BOOTCAMP/AAAI_plots/PoS_3_20_vh=0.08/run3"]
+		},
+		{
+			"name": "f9_role_switch_vs_no_switch.py",
+			"type": "python",
+			"request": "launch",
+			"program": "${workspaceFolder}/plottings/f9_role_switch_vs_no_switch.py",
+			"console": "integratedTerminal",
+			"args": ["/Volumes/BOOTCAMP/AAAI_plots/PoS_3_20_vh=0.08_Sharded_Role_Switch/run1", "/Volumes/BOOTCAMP/AAAI_plots/PoS_3_20_vh=0.08_Sharded_Role_Switch/run2", "/Volumes/BOOTCAMP/AAAI_plots/PoS_3_20_vh=0.08_Sharded_Role_Switch/run3", "/Volumes/BOOTCAMP/AAAI_plots/PoS_3_20_vh=0.08_Sharded_NO_Role_Switch/run1", "/Volumes/BOOTCAMP/AAAI_plots/PoS_3_20_vh=0.08_Sharded_NO_Role_Switch/run2", "/Volumes/BOOTCAMP/AAAI_plots/PoS_3_20_vh=0.08_Sharded_NO_Role_Switch/run3"]
+		},
+		{
+			"name": "f10_f11_plot_PoS_effectiveness.py",
+			"type": "python",
+			"request": "launch",
+			"program": "${workspaceFolder}/plottings/f10_f11_plot_PoS_effectiveness.py",
+			"console": "integratedTerminal",
+			"args": ["/Volumes/BOOTCAMP/AAAI_plots/PoS_6_20_vh=0.08_PoS_Effectiveness/6m_off/run1", "/Volumes/BOOTCAMP/AAAI_plots/PoS_6_20_vh=0.08_PoS_Effectiveness/6m_off/run2", "/Volumes/BOOTCAMP/AAAI_plots/PoS_6_20_vh=0.08_PoS_Effectiveness/6m_off/run3", "/Volumes/BOOTCAMP/AAAI_plots/PoS_6_20_vh=0.08_PoS_Effectiveness/6m_on/run1", "/Volumes/BOOTCAMP/AAAI_plots/PoS_6_20_vh=0.08_PoS_Effectiveness/6m_on/run2", "/Volumes/BOOTCAMP/AAAI_plots/PoS_6_20_vh=0.08_PoS_Effectiveness/6m_on/run3"]
+		},
+		// {
+		// 	"name": "f10_f11_plot_PoS_effectiveness.py",
+		// 	"type": "python",
+		// 	"request": "launch",
+		// 	"program": "${workspaceFolder}/plottings/f10_f11_plot_PoS_effectiveness.py",
+		// 	"console": "integratedTerminal",
+		// 	"args": ["/Volumes/BOOTCAMP/AAAI_plots/PoS_3_20_vh=0.08_NO_WORKER_REWARDS/run1", "/Volumes/BOOTCAMP/AAAI_plots/PoS_3_20_vh=0.08_NO_WORKER_REWARDS/run2", "/Volumes/BOOTCAMP/AAAI_plots/PoS_3_20_vh=0.08_NO_WORKER_REWARDS/run3", "/Volumes/BOOTCAMP/AAAI_plots/PoS_3_20_vh=0.08/run1", "/Volumes/BOOTCAMP/AAAI_plots/PoS_3_20_vh=0.08/run2", "/Volumes/BOOTCAMP/AAAI_plots/PoS_3_20_vh=0.08/run3"]
+		// }
+		{
+			"name": "plot_impacts_diff_num_wvm.py",
+			"type": "python",
+			"request": "launch",
+			"program": "${workspaceFolder}/plottings/plot_impacts_diff_num_wvm.py",
+			"console": "integratedTerminal",
+			"args": ["/Volumes/BOOTCAMP/AAAI_plots/Impacts Of Number Of Validators/8,9,3","/Volumes/BOOTCAMP/AAAI_plots/Impacts Of Number Of Validators/9,8,3","/Volumes/BOOTCAMP/AAAI_plots/Impacts Of Number Of Validators/10,7,3","/Volumes/BOOTCAMP/AAAI_plots/Impacts Of Number Of Validators/11,6,3","/Volumes/BOOTCAMP/AAAI_plots/PoS_3_20_vh=0.08/run1","/Volumes/BOOTCAMP/AAAI_plots/Impacts Of Number Of Validators/13,4,3","/Volumes/BOOTCAMP/AAAI_plots/Impacts Of Number Of Validators/14,3,3"]
+		},
+		{
+			"name": "plot_vfl_nm_0_diff_epoch.py",
+			"type": "python",
+			"request": "launch",
+			"program": "${workspaceFolder}/plottings/plot_vfl_nm_0_diff_epoch.py",
+			"console": "integratedTerminal",
+			"args": ["/Volumes/BOOTCAMP/AAAI_plots/VFL_nm_0_diff_epoch"]
 		}
 	]
 }

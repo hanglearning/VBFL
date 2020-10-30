@@ -84,7 +84,7 @@ if a_device_accuracies_across_rounds:
 # draw graphs over all available comm rounds
 # plt.xticks(range(draw_comm_rounds), [i for i in range(1, draw_comm_rounds + 1)], rotation=90)
 plt.plot(range(draw_comm_rounds), m_device_accuracies_across_rounds, label=f'{total_malicious_devices}/{total_devices} malicious devices global accuracy')
-plt.plot(range(draw_comm_rounds), b_device_accuracies_across_rounds, label=f'all {total_devices} normal devices global accuracy')
+plt.plot(range(draw_comm_rounds), b_device_accuracies_across_rounds, label=f'all {total_devices} legitimate devices global accuracy')
 #plt.plot(range(draw_comm_rounds), a_device_accuracies_across_rounds, label=f'all {total_devices} benigh PoS')
 
 if b_device_accuracies_across_rounds:
@@ -106,10 +106,10 @@ if a_device_accuracies_across_rounds:
 			plt.annotate(a_device_accuracies_across_rounds[accuracy_iter], xy=(accuracy_iter, a_device_accuracies_across_rounds[accuracy_iter]), size=8)
 
 
-plt.legend(loc='best')
+plt.legend(loc='l', bbox_to_anchor=(0.3,0.7))
 plt.xlabel('Communication Rounds')
-plt.ylabel('Accuracies Across Communication Rounds')
-plt.title('Global Model Accuracies Comparison')
-# plt.title('Global Model Accuracies Comparison Before and After Introducing Noices through Vanilla FedAvg Communication Rounds On MNIST Dataset Using MNIST_CNN')
+plt.ylabel('Accuracies of Communication Rounds')
+plt.title('Global Model Accuracy Comparisons')
+# plt.title('Global Model Accuracy Comparisons Before and After Introducing Noices through vanilla FedAvg Communication Rounds On MNIST Dataset Using MNIST_CNN')
 plt.show()
 print()

@@ -35,7 +35,7 @@ if __name__=="__main__":
 
 	# 1. parse arguments and save to file
 	# create folder of logs
-	log_files_folder_path = f"WHDY_vanilla_malicious_involved_fedavg/logs/{date_time}"
+	log_files_folder_path = f"/content/drive/My Drive/VFL Code Files/logs/{date_time}"
 	os.mkdir(log_files_folder_path)
 
 	# save arguments used 
@@ -75,12 +75,15 @@ if __name__=="__main__":
 		comm_round_start_time = time.time()
 		print("communicate round {}".format(i+1))
 
+		comm_round_folder = f"{log_files_folder_path}/comm_{i+1}"
+		os.mkdir(comm_round_folder)
+
 		order = np.random.permutation(args['num_of_clients'])
 		clients_in_comm = ['client_{}'.format(i+1) for i in order[0:num_in_comm]]
 
 		sum_parameters = None
 		for client in clients_in_comm:
-			local_parameters = myClients.clients_set[client].localUpdate(args['epoch'], args['batchsize'], loss_func, global_parameters)
+			local_parameters = myClients.clients_set[client].localUpdate(args['epoch'], args['batchsize'], loss_func, global_parameters, comm_round_folder, i)
 			if sum_parameters is None:
 				sum_parameters = local_parameters
 			else:
@@ -95,11 +98,11 @@ if __name__=="__main__":
 		# open(f"{log_files_folder_path}/comm_{i+1}.txt", 'w').close()
 		for client in clients_list:
 			accuracy_this_round = client.evaluate_model_weights(global_parameters)
-			with open(f"{log_files_folder_path}/comm_{i+1}.txt", "a") as file:
+			with open(f"{comm_round_folder}/global_comm_{i+1}.txt", "a") as file:
 				is_malicious_node = "M" if client.is_malicious else "B"
 				file.write(f"{client.idx} {is_malicious_node}: {accuracy_this_round}\n")
 		# logging time
 		comm_round_spent_time = time.time() - comm_round_start_time
-		with open(f"{log_files_folder_path}/comm_{i+1}.txt", "a") as file:
+		with open(f"{comm_round_folder}/global_comm_{i+1}.txt", "a") as file:
 			file.write(f"comm_round_block_gen_time: {comm_round_spent_time}\n")
 

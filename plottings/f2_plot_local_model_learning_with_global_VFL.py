@@ -12,7 +12,7 @@ all_rounds_log_folders = sorted([f for f in os.listdir(log_folder) if f.startswi
 
 draw_comm_rounds = len(all_rounds_log_folders)
 
-draw_comm_rounds = 10
+draw_comm_rounds = 50
 draw_device_idx = 'client_1'
 
 local_accuracies_e1 = []
@@ -29,7 +29,7 @@ for sub_log_folder_name in all_rounds_log_folders[:draw_comm_rounds]:
 	local_accuracies_e1 = round(float(file_whole_text.split("\n")[0].split(' ')[-1]), 3)
 	local_accuracies_e5 = round(float(file_whole_text.split("\n")[4].split(' ')[-1]), 3)
 	# local_accuracies.append(local_accuracy)
-	draw_accuracies.append(local_accuracies_e1)
+	# draw_accuracies.append(local_accuracies_e1)
 	draw_accuracies.append(local_accuracies_e5)
 	# record global accuracy
 	file = open(f"{sub_log_folder_path}/global_{sub_log_folder_name}.txt","r")
@@ -45,11 +45,11 @@ x_axis_labels = []
 x_axis_ls = []
 x_axis_gs = []
 for i in range(draw_comm_rounds):
-	x_axis_labels.append(f'le1')
+	# x_axis_labels.append(f'le1')
 	x_axis_labels.append(f'le5')
 	x_axis_labels.append(f'g{i+1}')
 	# x_axis_ls.append(2*i)
-	x_axis_gs.append(3*i+2)
+	# x_axis_gs.append(3*i+2)
 # draw graphs over all available comm rounds
 plt.xticks(range(len(x_axis_labels)), x_axis_labels, rotation=90)
 # draw the whole learning curve
@@ -59,7 +59,7 @@ plt.plot(range(len(x_axis_labels)), draw_accuracies, label=f'overall learning cu
 # connect local model learning curve
 #plt.plot(x_axis_ls, local_accuracies, label=f'{draw_device_idx} local learning curve')
 # connect global model learning curve
-plt.plot(x_axis_gs, global_accuracies, label=f'global learning curve')
+# plt.plot(x_axis_gs, global_accuracies, label=f'global learning curve')
 
 # dashed lines
 # plt.vlines(range(len(x_axis_labels)), 0, draw_accuracies, linestyle="dashed", color='c')
