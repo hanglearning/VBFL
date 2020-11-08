@@ -40,7 +40,7 @@
 			"request": "launch",
 			"program": "${workspaceFolder}/WHDY_vanilla_malicious_involved_fedavg/f1_plot_graph_combine.py",
 			"console": "integratedTerminal",
-			"args": ["/Volumes/BOOTCAMP/AAAI_plots/VFL_nm0_run1", "/Volumes/BOOTCAMP/AAAI_plots/VFL_nm3_run1"]
+			"args": ["/Volumes/BOOTCAMP/AAAI_plots/VFL_nm0/run1", "/Volumes/BOOTCAMP/AAAI_plots/VFL_nm3/run2", , "/Volumes/BOOTCAMP/AAAI_plots/PoS_3_20_vh=0.08/run1"]
 		},
 		{
 			"name": "plot_graph_global_vs_locals.py",

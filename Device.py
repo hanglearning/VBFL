@@ -609,8 +609,11 @@ class Device:
 	def malicious_worker_add_noise_to_weights(self, m):
 		with torch.no_grad():
 			if hasattr(m, 'weight'):
-				m.weight.add_(torch.randn(m.weight.size()).to(self.dev))
-				
+				noise = torch.randn(m.weight.size())
+				variance_of_noise = torch.var(noise)
+				m.weight.add_(noise.to(self.dev))
+				return variance_of_noise
+
 	# TODO change to computation power
 	def worker_local_update(self, rewards, log_files_folder_path_comm_round, comm_round, local_epochs=1):
 		print(f"Worker {self.idx} is doing local_update with computation power {self.computation_power} and link speed {round(self.link_speed,3)} bytes/s")
@@ -640,8 +643,10 @@ class Device:
 		except:
 			self.local_update_time = float('inf')
 		if self.is_malicious:
-			self.net.apply(self.malicious_worker_add_noise_to_weights)
+			variance_of_noise = self.net.apply(self.malicious_worker_add_noise_to_weights)
 			print(f"malicious worker {self.idx} has added noise to its local updated weights before transmitting")
+			with open(f"{log_files_folder_path_comm_round}/comm_{comm_round}_noise_variance.txt", "a") as file:
+				file.write(f"{self.return_idx()} {self.return_role()} {is_malicious_node} noise variance: {variance_of_noise}\n")
 		# record accuracies to find good -vh
 		with open(f"{log_files_folder_path_comm_round}/worker_final_local_accuracies_comm_{comm_round}.txt", "a") as file:
 			file.write(f"{self.return_idx()} {self.return_role()} {is_malicious_node}: {self.validate_model_weights(self.net.state_dict())}\n")
