@@ -12,6 +12,7 @@ class client(object):
 		self.idx = idx
 		self.is_malicious = is_malicious
 		self.noise_variance = noise_variance
+		self.variance_of_noises = None or []
 		self.train_ds = trainDataSet
 		self.test_dl = assigned_test_dl
 		self.dev = dev
@@ -26,7 +27,10 @@ class client(object):
 				noise = self.noise_variance * torch.randn(m.weight.size())
 				variance_of_noise = torch.var(noise)
 				m.weight.add_(noise.to(self.dev))
-				return variance_of_noise
+				self.variance_of_noises.append(float(variance_of_noise))
+
+	def reset_variance_of_noise(self):
+		self.variance_of_noises.clear()
 
 	def localUpdate(self, localEpoch, localBatchSize, lossFun, global_parameters, comm_round_folder, i):
 		self.net.load_state_dict(global_parameters, strict=True)
@@ -44,11 +48,11 @@ class client(object):
 				accuracy_this_epoch = self.evaluate_model_weights(self.net.state_dict())
 				file.write(f"{self.idx} {is_malicious_node} epoch_{epoch+1}: {accuracy_this_epoch}\n")
 		if self.is_malicious:
-			variance_of_noise = self.net.apply(self.malicious_worker_add_noise_to_weights)
+			self.net.apply(self.malicious_worker_add_noise_to_weights)
 			print(f"malicious client {self.idx} has added noise to its local updated weights before transmitting")
-			with open(f"{comm_round_folder}/{self.idx}_local_comm_{i+1}.txt", "a") as file:
-			    file.write(f"{self.idx} {is_malicious_node} noise_injected: {self.evaluate_model_weights(self.net.state_dict())}\n")
-				file.write(f"{self.idx} {is_malicious_node} noise_variance: {variance_of_noise}\n")
+			with open(f"{comm_round_folder}/{self.idx}_{is_malicious_node}_local_comm_{i+1}.txt", "a") as file:
+				file.write(f"{self.idx} {is_malicious_node} noise_injected: {self.evaluate_model_weights(self.net.state_dict())}\n")
+				file.write(f"{self.idx} {is_malicious_node} noise_variances: {self.variance_of_noises}\n")
 		return self.net.state_dict()
 
 	def evaluate_model_weights(self, global_parameters):

@@ -114,7 +114,8 @@ class Device:
 		self.post_validation_transactions_queue = None or []
 		self.validator_threshold = validator_threshold
 		self.validator_local_accuracy = None
-		
+		''' For malicious node '''
+		self.variance_of_noises = None or []
 		
 
 	''' Common Methods '''
@@ -613,7 +614,7 @@ class Device:
 				noise = self.noise_variance * torch.randn(m.weight.size())
 				variance_of_noise = torch.var(noise)
 				m.weight.add_(noise.to(self.dev))
-				return variance_of_noise
+				self.variance_of_noises.append(float(variance_of_noise))
 
 	# TODO change to computation power
 	def worker_local_update(self, rewards, log_files_folder_path_comm_round, comm_round, local_epochs=1):
@@ -644,10 +645,10 @@ class Device:
 		except:
 			self.local_update_time = float('inf')
 		if self.is_malicious:
-			variance_of_noise = self.net.apply(self.malicious_worker_add_noise_to_weights)
+			self.net.apply(self.malicious_worker_add_noise_to_weights)
 			print(f"malicious worker {self.idx} has added noise to its local updated weights before transmitting")
-			with open(f"{log_files_folder_path_comm_round}/comm_{comm_round}_noise_variance.txt", "a") as file:
-				file.write(f"{self.return_idx()} {self.return_role()} {is_malicious_node} noise variance: {variance_of_noise}\n")
+			with open(f"{log_files_folder_path_comm_round}/comm_{comm_round}_variance_of_noises.txt", "a") as file:
+				file.write(f"{self.return_idx()} {self.return_role()} {is_malicious_node} noise variances: {self.variance_of_noises}\n")
 		# record accuracies to find good -vh
 		with open(f"{log_files_folder_path_comm_round}/worker_final_local_accuracies_comm_{comm_round}.txt", "a") as file:
 			file.write(f"{self.return_idx()} {self.return_role()} {is_malicious_node}: {self.validate_model_weights(self.net.state_dict())}\n")
@@ -703,6 +704,7 @@ class Device:
 		self.worker_associated_miner = None
 		self.local_update_time = None
 		self.local_total_epoch = 0
+		self.variance_of_noises.clear()
 
 	def receive_block_from_miner(self, received_block, source_miner):
 		if not (received_block.return_mined_by() in self.black_list or source_miner in self.black_list):

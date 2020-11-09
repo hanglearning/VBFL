@@ -34,10 +34,10 @@ class DatasetLoad(object):
 		test_images = extract_images(test_images_path)
 		test_labels = extract_labels(test_labels_path)
 		# CPU reduce size
-		# train_images = train_images[:600]
-		# train_labels = train_labels[:600]
-		# test_images = test_images[:600]
-		# test_labels = test_labels[:600]
+		train_images = train_images[:60]
+		train_labels = train_labels[:60]
+		test_images = test_images[:60]
+		test_labels = test_labels[:60]
 
 		# 60000 data points
 		assert train_images.shape[0] == train_labels.shape[0]

@@ -36,7 +36,7 @@ if __name__=="__main__":
 
 	# 1. parse arguments and save to file
 	# create folder of logs
-	log_files_folder_path = f"/content/drive/My Drive/VFL Code Files/logs/{date_time}"
+	log_files_folder_path = f"WHDY_vanilla_malicious_involved_fedavg/logs/{date_time}"
 	os.mkdir(log_files_folder_path)
 
 	# save arguments used 
@@ -84,6 +84,7 @@ if __name__=="__main__":
 
 		sum_parameters = None
 		for client in clients_in_comm:
+			myClients.clients_set[client].reset_variance_of_noise()
 			local_parameters = myClients.clients_set[client].localUpdate(args['epoch'], args['batchsize'], loss_func, global_parameters, comm_round_folder, i)
 			if sum_parameters is None:
 				sum_parameters = local_parameters
