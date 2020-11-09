@@ -25,6 +25,7 @@ parser.add_argument('-iid', '--IID', type=int, default=0, help='the way to alloc
 # Hang added
 parser.add_argument('-nm', '--num_malicious', type=int, default=0, help="number of malicious nodes in the network. malicious node's data sets will be introduced Gaussian noise")
 parser.add_argument('-st', '--shard_test_data', type=int, default=0, help='it is easy to see the global models are consistent across clients when the test dataset is NOT sharded')
+parser.add_argument('-nv', '--noise_variance', type=int, default=1, help="noise variance level of the injected Gaussian Noise")
 # end
 
 
@@ -66,7 +67,7 @@ if __name__=="__main__":
 	loss_func = F.cross_entropy
 	# opti = optim.SGD(net.parameters(), lr=args['learning_rate'])
 
-	myClients = ClientsGroup('mnist', args['IID'], args['num_of_clients'], args['learning_rate'], dev, net, args['num_malicious'], shard_test_data=args['shard_test_data'])
+	myClients = ClientsGroup('mnist', args['IID'], args['num_of_clients'], args['learning_rate'], dev, net, args['num_malicious'], args['noise_variance'], shard_test_data=args['shard_test_data'])
 	# testDataLoader = myClients.test_data_loader
 
 	num_in_comm = int(max(args['num_of_clients'] * args['cfraction'], 1))
