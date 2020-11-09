@@ -17,7 +17,7 @@ from Models import Mnist_2NN, Mnist_CNN
 from Blockchain import Blockchain
 
 class Device:
-	def __init__(self, idx, assigned_train_ds, assigned_test_dl, local_batch_size, learning_rate, loss_func, opti, network_stability, net, dev, miner_acception_wait_time, miner_accepted_transactions_size_limit, validator_threshold, pow_difficulty, even_link_speed_strength, base_data_transmission_speed, even_computation_power, is_malicious, malicious_updates_discount, knock_out_rounds, lazy_worker_knock_out_rounds):
+	def __init__(self, idx, assigned_train_ds, assigned_test_dl, local_batch_size, learning_rate, loss_func, opti, network_stability, net, dev, miner_acception_wait_time, miner_accepted_transactions_size_limit, validator_threshold, pow_difficulty, even_link_speed_strength, base_data_transmission_speed, even_computation_power, is_malicious, noise_variance, malicious_updates_discount, knock_out_rounds, lazy_worker_knock_out_rounds):
 		self.idx = idx
 		self.train_ds = assigned_train_ds
 		self.test_dl = assigned_test_dl
@@ -42,7 +42,6 @@ class Device:
 			self.link_speed = random.random() * base_data_transmission_speed
 		self.devices_dict = None
 		self.aio = False
-		self.malicious_updates_discount = malicious_updates_discount
 		''' simulating hardware equipment strength, such as good processors and RAM capacity. Following recorded times will be shrunk by this value of times
 		# for workers, its update time
 		# for miners, its PoW time
@@ -71,6 +70,8 @@ class Device:
 		self.has_added_block = False
 		self.the_added_block = None
 		self.is_malicious = is_malicious
+		self.noise_variance = noise_variance
+		self.malicious_updates_discount = malicious_updates_discount
 		# used to identify slow or lazy workers
 		self.active_worker_record_by_round = {}
 		self.untrustworthy_workers_record_by_comm_round = {}
@@ -609,7 +610,7 @@ class Device:
 	def malicious_worker_add_noise_to_weights(self, m):
 		with torch.no_grad():
 			if hasattr(m, 'weight'):
-				noise = torch.randn(m.weight.size())
+				noise = self.noise_variance * torch.randn(m.weight.size())
 				variance_of_noise = torch.var(noise)
 				m.weight.add_(noise.to(self.dev))
 				return variance_of_noise
@@ -1283,7 +1284,7 @@ class Device:
 			return validation_time, transaction_to_validate
 
 class DevicesInNetwork(object):
-	def __init__(self, data_set_name, is_iid, batch_size, learning_rate, loss_func, opti, num_devices, network_stability, net, dev, knock_out_rounds, lazy_worker_knock_out_rounds, shard_test_data, miner_acception_wait_time, miner_accepted_transactions_size_limit, validator_threshold, pow_difficulty, even_link_speed_strength, base_data_transmission_speed, even_computation_power, malicious_updates_discount, num_malicious):
+	def __init__(self, data_set_name, is_iid, batch_size, learning_rate, loss_func, opti, num_devices, network_stability, net, dev, knock_out_rounds, lazy_worker_knock_out_rounds, shard_test_data, miner_acception_wait_time, miner_accepted_transactions_size_limit, validator_threshold, pow_difficulty, even_link_speed_strength, base_data_transmission_speed, even_computation_power, malicious_updates_discount, num_malicious, noise_variance):
 		self.data_set_name = data_set_name
 		self.is_iid = is_iid
 		self.batch_size = batch_size
@@ -1304,6 +1305,7 @@ class DevicesInNetwork(object):
 		self.even_computation_power = even_computation_power
 		self.num_malicious = num_malicious
 		self.malicious_updates_discount = malicious_updates_discount
+		self.noise_variance = noise_variance
 		# distribute dataset
 		''' validator '''
 		self.validator_threshold = validator_threshold
@@ -1372,7 +1374,7 @@ class DevicesInNetwork(object):
 				# add Gussian Noise
 
 			device_idx = f'device_{i+1}'
-			a_device = Device(device_idx, TensorDataset(torch.tensor(local_train_data), torch.tensor(local_train_label)), test_data_loader, self.batch_size, self.learning_rate, self.loss_func, self.opti, self.default_network_stability, self.net, self.dev, self.miner_acception_wait_time, self.miner_accepted_transactions_size_limit, self.validator_threshold, self.pow_difficulty, self.even_link_speed_strength, self.base_data_transmission_speed, self.even_computation_power, is_malicious, self.malicious_updates_discount, self.knock_out_rounds, self.lazy_worker_knock_out_rounds)
+			a_device = Device(device_idx, TensorDataset(torch.tensor(local_train_data), torch.tensor(local_train_label)), test_data_loader, self.batch_size, self.learning_rate, self.loss_func, self.opti, self.default_network_stability, self.net, self.dev, self.miner_acception_wait_time, self.miner_accepted_transactions_size_limit, self.validator_threshold, self.pow_difficulty, self.even_link_speed_strength, self.base_data_transmission_speed, self.even_computation_power, is_malicious, self.noise_variance, self.malicious_updates_discount, self.knock_out_rounds, self.lazy_worker_knock_out_rounds)
 			# device index starts from 1
 			self.devices_set[device_idx] = a_device
 			print(f"Sharding dataset to {device_idx} done.")

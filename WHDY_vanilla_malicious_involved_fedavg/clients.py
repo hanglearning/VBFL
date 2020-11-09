@@ -8,9 +8,10 @@ from torch import optim
 import random
 
 class client(object):
-	def __init__(self, idx, is_malicious, trainDataSet, assigned_test_dl, learning_rate, net, dev):
+	def __init__(self, idx, is_malicious, noise_variance, trainDataSet, assigned_test_dl, learning_rate, net, dev):
 		self.idx = idx
 		self.is_malicious = is_malicious
+		self.noise_variance = noise_variance
 		self.train_ds = trainDataSet
 		self.test_dl = assigned_test_dl
 		self.dev = dev
@@ -22,7 +23,7 @@ class client(object):
 	def malicious_worker_add_noise_to_weights(self, m):
 		with torch.no_grad():
 			if hasattr(m, 'weight'):
-				noise = torch.randn(m.weight.size())
+				noise = self.noise_variance * torch.randn(m.weight.size())
 				variance_of_noise = torch.var(noise)
 				m.weight.add_(noise.to(self.dev))
 				return variance_of_noise
@@ -65,7 +66,7 @@ class client(object):
 
 
 class ClientsGroup(object):
-	def __init__(self, dataSetName, isIID, numOfClients, learning_rate, dev, net, num_malicious, shard_test_data):
+	def __init__(self, dataSetName, isIID, numOfClients, learning_rate, dev, net, num_malicious, noise_variance, shard_test_data):
 		self.data_set_name = dataSetName
 		self.is_iid = isIID
 		self.num_of_clients = numOfClients
@@ -74,6 +75,7 @@ class ClientsGroup(object):
 		self.dev = dev
 		self.clients_set = {}
 		self.num_malicious = num_malicious
+		self.noise_variance = noise_variance
 		self.shard_test_data = shard_test_data
 
 		self.test_data_loader = None
@@ -136,7 +138,7 @@ class ClientsGroup(object):
 				# add Gussian Noise
 			client_idx = f'client_{i+1}'
 
-			someone = client(client_idx, is_malicious, TensorDataset(torch.tensor(local_train_data), torch.tensor(local_train_label)), test_data_loader, self.learning_rate, self.net, self.dev)
+			someone = client(client_idx, is_malicious, self.noise_variance, TensorDataset(torch.tensor(local_train_data), torch.tensor(local_train_label)), test_data_loader, self.learning_rate, self.net, self.dev)
 			self.clients_set[client_idx] = someone
 
 
