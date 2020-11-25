@@ -10,7 +10,7 @@
 			"request": "launch",
 			"program": "${workspaceFolder}/main.py",
 			"console": "integratedTerminal",
-			"args": ["-nd", "20", "-B", "10", "-mn", "mnist_cnn", "-max_ncomm", "1000", "-iid", "0", "-lr", "0.01", "-g", "5", "-ns", "1", "-v", "1", "-ha", "12,5,3", "-aio", "1", "-st", "0", "-nm", "3", "-mt", "0.0", "-pow", "0", "-ko", "6", "-lo", "20", "-vh", "0.08"]
+			"args": ["-nd", "20", "-B", "10", "-mn", "mnist_cnn", "-max_ncomm", "1000", "-iid", "0", "-lr", "0.01", "-g", "5", "-ns", "1", "-v", "1", "-ha", "12,5,3", "-aio", "1", "-st", "0", "-nm", "3", "-mt", "0.0", "-pow", "1", "-ko", "6", "-lo", "20", "-vh", "0.08", "-mp", "20"]
 		},
 		{
 			"name": "server.py",
@@ -67,12 +67,12 @@
 			"args": ["/Users/chenhang91/TEMP/AAAI draw log/10202020_055020 VFL with Noisy Acc"]
 		},
 		{
-			"name": "f4_f5_plot_acc_diff_local_normal_vs_malicious_VFL.py",
+			"name": "f4_f5_malicious_A3_A4_VFL.py",
 			"type": "python",
 			"request": "launch",
-			"program": "${workspaceFolder}/plottings/f4_f5_plot_acc_diff_local_normal_vs_malicious_VFL.py",
+			"program": "${workspaceFolder}/plottings/f4_f5_malicious_A3_A4_VFL.py",
 			"console": "integratedTerminal",
-			"args": ["/Users/chenhang91/TEMP/AAAI draw log/10202020_055020 VFL with Noisy Acc"]
+			"args": ["/Volumes/BOOTCAMP/AAAI_plots/VFL_noise_variances135/nv_1", "/Volumes/BOOTCAMP/AAAI_plots/VFL_noise_variances135/nv_3", "/Volumes/BOOTCAMP/AAAI_plots/VFL_noise_variances135/nv_5"]
 		},
 		{
 			"name": "plot_acc_diff_global_and_local_VFL.py",
@@ -129,6 +129,14 @@
 			"program": "${workspaceFolder}/plottings/plot_vfl_nm_0_diff_epoch.py",
 			"console": "integratedTerminal",
 			"args": ["/Volumes/BOOTCAMP/AAAI_plots/VFL_nm_0_diff_epoch"]
+		},
+		{
+			"name": "draw_validator_threshold.py",
+			"type": "python",
+			"request": "launch",
+			"program": "${workspaceFolder}/plottings/draw_validator_threshold.py",
+			"console": "integratedTerminal",
+			"args": ["/Volumes/BOOTCAMP/AAAI_plots/PoS 3-20 vh=1 32 rounds/false_positive_malious_nodes_inside_slipped.txt", "/Volumes/BOOTCAMP/AAAI_plots/PoS 3-20 vh=1 32 rounds/true_positive_good_nodes_inside_correct.txt"]
 		}
 	]
 }

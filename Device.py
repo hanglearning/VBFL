@@ -77,6 +77,8 @@ class Device:
 		self.untrustworthy_workers_record_by_comm_round = {}
 		self.untrustworthy_validators_record_by_comm_round = {}
 		# self.untrustworthy_miners = {} just drop the block, as later when resync, tho untrustworthy by this paticular, have to agree to most
+		# for picking PoS legitimate blockd;bs
+		# self.stake_tracker = {} # used some tricks in main.py for ease of programming
 		''' For workers '''
 		self.local_updates_rewards_per_transaction = 0
 		self.received_block_from_miner = None
@@ -273,6 +275,48 @@ class Device:
 				else:
 					return False
 		return True
+
+	def accumulate_chain_stake(self, chain_to_accumulate):
+		accumulated_stake = 0
+		chain_to_accumulate = chain_to_accumulate.return_chain_structure()
+		for block in chain_to_accumulate:
+			accumulated_stake += self.devices_dict[block.return_mined_by()].return_stake()
+		return accumulated_stake
+
+	def resync_chain(self, mining_consensus):
+		if mining_consensus == 'PoW':
+			self.pow_resync_chain()
+		else:
+			self.pos_resync_chain()
+
+	def pos_resync_chain(self):
+		print(f"{self.role} {self.idx} is looking for a chain with the highest accumulated miner's stake in the network...")
+		highest_stake_chain = None
+		updated_from_peer = None
+		curr_chain_stake = self.accumulate_chain_stake(self.return_blockchain_object())
+		for peer in self.peer_list:
+			if peer.is_online():
+				peer_chain = peer.return_blockchain_object()
+				peer_chain_stake = self.accumulate_chain_stake(peer_chain)
+				if peer_chain_stake > curr_chain_stake:
+					if self.check_chain_validity(peer_chain):
+						print(f"A chain from {peer.return_idx()} with total stake {peer_chain_stake} has been found (> currently compared chain stake {curr_chain_stake}) and verified.")
+						# Higher stake valid chain found!
+						curr_chain_stake = peer_chain_stake
+						highest_stake_chain = peer_chain
+						updated_from_peer = peer.return_idx()
+					else:
+						print(f"A chain from {peer.return_idx()} with higher stake has been found BUT NOT verified. Skipped this chain for syncing.")
+		if highest_stake_chain:
+			# compare chain difference
+			highest_stake_chain_structure = highest_stake_chain.return_chain_structure()
+			# need more efficient machenism which is to reverse updates by # of blocks
+			self.return_blockchain_object().replace_chain(highest_stake_chain_structure)
+			print(f"{self.idx} chain resynced from peer {updated_from_peer}.")
+			#return block_iter
+			return True 
+		print("Chain not resynced.")
+		return False
 
 	def pow_resync_chain(self):
 		print(f"{self.role} {self.idx} is looking for a longer chain in the network...")
@@ -1274,10 +1318,11 @@ class Device:
 					transaction_to_validate['update_direction'] = not transaction_to_validate['update_direction']
 					with open(f"{log_files_folder_path_comm_round}/malicious_validator_log.txt", 'a') as file:
 						file.write(f"malicious validator {self.idx} has flipped the voting of worker {worker_transaction_device_idx} from {old_voting} to {transaction_to_validate['update_direction']} in round {comm_round}\n")
+				transaction_to_validate['validation_rewards'] = rewards
 			else:
 				transaction_to_validate['update_direction'] = 'N/A'
+				transaction_to_validate['validation_rewards'] = 0
 			transaction_to_validate['validation_done_by'] = self.idx
-			transaction_to_validate['validation_rewards'] = rewards
 			validation_time = (time.time() - validation_time)/self.computation_power
 			transaction_to_validate['validation_time'] = validation_time
 			transaction_to_validate['validator_rsa_pub_key'] = self.return_rsa_pub_key()

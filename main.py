@@ -69,6 +69,7 @@ parser.add_argument('-pow', '--pow_difficulty', type=int, default=0, help="if se
 # blockchain FL validator/miner restriction tuning parameters
 parser.add_argument('-mt', '--miner_acception_wait_time', type=float, default=0.0, help="default time window for miners to accept transactions, in seconds. 0 means no time limit, and each device will just perform same amount(-le) of epochs per round like in FedAvg paper")
 parser.add_argument('-ml', '--miner_accepted_transactions_size_limit', type=float, default=0.0, help="no further transactions will be accepted by miner after this limit. 0 means no size limit. either this or -mt has to be specified, or both. This param determines the final block_size")
+parser.add_argument('-mp', '--miner_pos_propagated_block_wait_time', type=float, default=float("inf"), help="this wait time is counted from the beginning of the comm round, used to simulate forking events in PoS")
 parser.add_argument('-vh', '--validator_threshold', type=float, default=0.01, help="a threshold value of accuracy difference to determine malicious worker")
 parser.add_argument('-md', '--malicious_updates_discount', type=float, default=0.0, help="do not entirely drop the voted negative worker transaction because that risks the same worker dropping the entire transactions and repeat its accuracy again and again and will be kicked out. Apply a discount factor instead to the false negative worker's updates are by some rate applied so it won't repeat")
 parser.add_argument('-mv', '--malicious_validator_on', type=int, default=0, help="let malicious validator flip voting result")
@@ -239,6 +240,9 @@ if __name__=="__main__":
 		# open(f"{log_files_folder_path}/mistakenly_kicked_validators.txt", 'w').close()
 		open(f"{log_files_folder_path}/kicked_lazy_workers.txt", 'w').close()
 
+		# 12. setup the mining consensus
+		mining_consensus = 'PoW' if args['pow_difficulty'] else 'PoS'
+
 	# create malicious worker identification database
 	conn = sqlite3.connect(f'{log_files_folder_path}/malicious_wokrer_identifying_log.db')
 	conn_cursor = conn.cursor()
@@ -251,7 +255,7 @@ if __name__=="__main__":
 	when_resyncing text
 	)""")
 
-	# BlockFL starts here
+	# VBFL starts here
 	for comm_round in range(latest_round_num + 1, args['max_num_comm']+1):
 		# create round specific log folder
 		log_files_folder_path_comm_round = f"{log_files_folder_path}/comm_{comm_round}"
@@ -347,7 +351,7 @@ if __name__=="__main__":
 		for worker_iter in range(len(workers_this_round)):
 			worker = workers_this_round[worker_iter]
 			# PoW resync chain(block could be dropped due to fork from last round)
-			if worker.pow_resync_chain():
+			if worker.resync_chain(mining_consensus):
 				worker.update_model_after_chain_resync(log_files_folder_path_comm_round, conn, conn_cursor)
 			# worker (should) perform local update and associate
 			print(f"{worker.return_idx()} - worker {worker_iter+1}/{len(workers_this_round)} will associate with a validator and a miner, if online...")
@@ -370,7 +374,7 @@ if __name__=="__main__":
 		for validator_iter in range(len(validators_this_round)):
 			validator = validators_this_round[validator_iter]
 			# PoW resync chain
-			if validator.pow_resync_chain():
+			if validator.resync_chain(mining_consensus):
 				validator.update_model_after_chain_resync(log_files_folder_path, conn, conn_cursor)
 			# associate with a miner to send post validation transactions
 			if validator.online_switcher():
@@ -529,7 +533,7 @@ if __name__=="__main__":
 		for miner_iter in range(len(miners_this_round)):
 			miner = miners_this_round[miner_iter]
 			# PoW resync chain
-			if miner.pow_resync_chain():
+			if miner.resync_chain(mining_consensus):
 				miner.update_model_after_chain_resync(log_files_folder_path, conn, conn_cursor)
 			print(f"{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} accepting validators' post-validation transactions...")
 			associated_validators = list(miner.return_associated_validators())
@@ -691,27 +695,25 @@ if __name__=="__main__":
 			else:
 				print(f"{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} did not receive any transaction from validator or miner in this round.")
 
-		mining_consensus = 'PoW' if args['pow_difficulty'] else 'PoS'
+		print(''' Step 6 - miners decide if adding a propagated block or its own mined block as the legitimate block, and request its associated devices to download this block''')
 		forking_happened = False
 		# comm_round_block_gen_time regarded as the time point when the winning miner mines its block, calculated from the beginning of the round. If there is forking in PoW or rewards info out of sync in PoS, this time is the avg time point of all the appended time by any device
 		comm_round_block_gen_time = []
-		if mining_consensus == 'PoW':
-			print("\nselect winning block based on PoW")
-			print(''' Step 6 - miners decide if adding a propagated block or its own mined block, and request its associated devices to download this block''')
-			# should not depend on min time selection
-			# abort mining if propagated block is received
-			for miner_iter in range(len(miners_this_round)):
-				miner = miners_this_round[miner_iter]
-				unordered_propagated_block_processing_queue = miner.return_unordered_propagated_block_processing_queue()
-				# add self mined block to the processing queue and sort by time
-				this_miner_mined_block = miner.return_mined_block()
-				if this_miner_mined_block:
-					unordered_propagated_block_processing_queue[miner.return_block_generation_time_point()] = this_miner_mined_block
-				ordered_all_blocks_processing_queue = sorted(unordered_propagated_block_processing_queue.items())
-				if ordered_all_blocks_processing_queue:
+		for miner_iter in range(len(miners_this_round)):
+			miner = miners_this_round[miner_iter]
+			unordered_propagated_block_processing_queue = miner.return_unordered_propagated_block_processing_queue()
+			# add self mined block to the processing queue and sort by time
+			this_miner_mined_block = miner.return_mined_block()
+			if this_miner_mined_block:
+				unordered_propagated_block_processing_queue[miner.return_block_generation_time_point()] = this_miner_mined_block
+			ordered_all_blocks_processing_queue = sorted(unordered_propagated_block_processing_queue.items())
+			if ordered_all_blocks_processing_queue:
+				if mining_consensus == 'PoW':
+					print("\nselect winning block based on PoW")
+					# should not depend on min time selection
+					# abort mining if propagated block is received
 					print(f"{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} is deciding if a valid propagated block arrived before it successfully mines its own block...")
 					for (block_arrival_time, block_to_verify) in ordered_all_blocks_processing_queue:
-						# sending miner in this case its the miner who mined and propagated this block
 						verified_block, verification_time = miner.verify_block(block_to_verify, block_to_verify.return_mined_by())
 						if verified_block:
 							block_mined_by = verified_block.return_mined_by()
@@ -728,50 +730,57 @@ if __name__=="__main__":
 								miner.request_to_download(verified_block, block_arrival_time + verification_time)
 								break								
 				else:
-					print(f"{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} does not receive a propagated block and has not mined its own block yet.")
-			# CHECK FOR FORKING
-			added_blocks_miner_set = set()
-			for device in devices_list:
-				the_added_block = device.return_the_added_block()
-				if the_added_block:
-					print(f"{device.return_role()} {device.return_idx()} has added a block mined by {the_added_block.return_mined_by()}")
-					added_blocks_miner_set.add(the_added_block.return_mined_by())
-					comm_round_block_gen_time.append(devices_in_network.devices_set[the_added_block.return_mined_by()].return_block_generation_time_point())
-			if len(added_blocks_miner_set) > 1:
-				print("WARNING: a forking event just happened!")
-				forking_happened = True
-				# cont = input("Press any key to continue")
-			else:
-				print("No forking event happened.")
-		else:
-			# PoS
-			print("select winning block based on PoS")
-			candidate_PoS_blocks = {}
-			for miner in miners_this_round:
-				if miner.return_mined_block():
-					candidate_PoS_blocks[miner.return_stake()] = miner.return_mined_block()
-			high_to_low_stake_ordered_blocks = sorted(candidate_PoS_blocks.items(), reverse=True)
-			# for PoS, simply requests every device in the network to add a valid block that has the most miner stake, which can be verified through chain
-			for device in devices_list:
-				for (stake, PoS_block) in high_to_low_stake_ordered_blocks:
-					winning_miner = devices_in_network.devices_set[PoS_block.return_mined_by()]
-					if winning_miner.online_switcher() and device.online_switcher():
-						verified_block, verification_time = device.verify_block(PoS_block, PoS_block.return_mined_by())
+					# PoS
+					candidate_PoS_blocks = {}
+					print("select winning block based on PoS")
+					# filter the ordered_all_blocks_processing_queue to contain only the blocks within time limit
+					for (block_arrival_time, block_to_verify) in ordered_all_blocks_processing_queue:
+						if block_arrival_time < args['miner_pos_propagated_block_wait_time']:
+							candidate_PoS_blocks[devices_in_network.devices_set[block_to_verify.return_mined_by()].return_stake()] = block_to_verify
+					high_to_low_stake_ordered_blocks = sorted(candidate_PoS_blocks.items(), reverse=True)
+					# for PoS, requests every device in the network to add a valid block that has the most miner stake in the PoS candidate blocks list, which can be verified through chain
+					for (stake, PoS_candidate_block) in high_to_low_stake_ordered_blocks:
+						verified_block, verification_time = miner.verify_block(PoS_candidate_block, PoS_candidate_block.return_mined_by())
 						if verified_block:
-							device.add_block(verified_block)
-							comm_round_block_gen_time.append(devices_in_network.devices_set[verified_block.return_mined_by()].return_block_generation_time_point())
-							print(f"{device.return_role()} {device.return_idx()} added a PoS block from {winning_miner.return_idx()} with stake {stake}")
-							break
-		try:
-			comm_round_block_gen_time = sum(comm_round_block_gen_time)/len(comm_round_block_gen_time)
-		except:
-			no_block_msg = "No block has been generated this round."
-			print(no_block_msg)
-			with open(f"{log_files_folder_path}/comm_{comm_round}.txt", "a") as file:
-				file.write(no_block_msg)
-			continue
+							block_mined_by = verified_block.return_mined_by()
+							if block_mined_by == miner.return_idx():
+								print(f"Miner {miner.return_idx()} with stake {stake} is adding its own mined block.")
+							else:
+								print(f"Miner {miner.return_idx()} will add a propagated block mined by miner {verified_block.return_mined_by()} with stake {stake}.")
+							if miner.online_switcher():
+								miner.add_block(verified_block)
+							else:
+								print(f"Unfortunately, miner {miner.return_idx()} goes offline while adding this block to its chain.")
+							if miner.return_the_added_block():
+								# requesting devices in its associations to download this block
+								miner.request_to_download(verified_block, block_arrival_time + verification_time)
+								break	
+			else:
+				print(f"{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} does not receive a propagated block and has not mined its own block yet.")
+		# CHECK FOR FORKING
+		added_blocks_miner_set = set()
+		for device in devices_list:
+			the_added_block = device.return_the_added_block()
+			if the_added_block:
+				print(f"{device.return_role()} {device.return_idx()} has added a block mined by {the_added_block.return_mined_by()}")
+				added_blocks_miner_set.add(the_added_block.return_mined_by())
+				block_generation_time_point = devices_in_network.devices_set[the_added_block.return_mined_by()].return_block_generation_time_point()
+				# commented, as we just want to plot the legitimate block gen time, and the wait time is to avoid forking. Also the logic is wrong. Should track the time to the slowest worker after its global model update
+				# if mining_consensus == 'PoS':
+				# 	if args['miner_pos_propagated_block_wait_time'] != float("inf"):
+				# 		block_generation_time_point += args['miner_pos_propagated_block_wait_time']
+				comm_round_block_gen_time.append(block_generation_time_point)
+		if len(added_blocks_miner_set) > 1:
+			print("WARNING: a forking event just happened!")
+			forking_happened = True
+			# cont = input("Press any key to continue")
+			with open(f"{log_files_folder_path}/forking_and_no_valid_block_log.txt", 'a') as file:
+				file.write(f"Forking in round {comm_round}\n")
+		else:
+			print("No forking event happened.")
+			
 
-		print(''' Step 6 last step - process the added block - 1.collect usable updated params\n 2.malicious nodes identification\n 3.get rewards\n 4.do local udpates ''')
+		print(''' Step 6 last step - process the added block - 1.collect usable updated params\n 2.malicious nodes identification\n 3.get rewards\n 4.do local udpates\n This code block is skipped if no valid block was generated in this round''')
 		for device in devices_list:
 			if device.return_the_added_block() and device.online_switcher():
 				# collect usable updated params, malicious nodes identification, get rewards and do local udpates
@@ -788,7 +797,16 @@ if __name__=="__main__":
 		# logging time, mining_consensus and forking
 		comm_round_spent_time = time.time() - comm_round_start_time
 		with open(f"{log_files_folder_path_comm_round}/accuracy_comm_{comm_round}.txt", "a") as file:
-			file.write(f"comm_round_block_gen_time: {comm_round_block_gen_time}\n")
+			# corner case when all miners in this round are malicious devices so their blocks are rejected
+			try:
+				comm_round_block_gen_time = max(comm_round_block_gen_time)
+				file.write(f"comm_round_block_gen_time: {comm_round_block_gen_time}\n")
+			except:
+				no_block_msg = "No valid block has been generated this round."
+				print(no_block_msg)
+				file.write(f"comm_round_block_gen_time: {no_block_msg}\n")
+				with open(f"{log_files_folder_path}/forking_and_no_valid_block_log.txt", 'a') as file2:
+					file2.write(f"No valid block in round {comm_round}\n")
 			file.write(f"mining_consensus: {mining_consensus} {args['pow_difficulty']}\n")
 			file.write(f"forking_happened: {forking_happened}\n")
 			file.write(f"comm_round_spent_time_on_this_machine: {comm_round_spent_time}")
@@ -801,12 +819,17 @@ if __name__=="__main__":
 				is_malicious_node = "M" if device.return_is_malicious() else "B"
 				file.write(f"{device.return_idx()} {device.return_role()} {is_malicious_node}: {device.return_stake()}\n")
 				
-		# if PoS, log the PoS block miner
+		# if PoS and no forking, log the PoS block miner
 		if mining_consensus == 'PoS':
-			with open(f"{log_files_folder_path_comm_round}/stake_comm_{comm_round}.txt", "a") as file:
-				PoS_mined_by = verified_block.return_mined_by()
-				is_malicious_node = "M" if devices_in_network.devices_set[PoS_mined_by].return_is_malicious() else "B"
-				file.write(f"PoS_block_mined_by: {verified_block.return_mined_by()} {is_malicious_node}\n")
+			if not forking_happened:
+				legitimate_PoS_block = devices_list[0].return_the_added_block()
+				with open(f"{log_files_folder_path_comm_round}/stake_comm_{comm_round}.txt", "a") as file:
+					PoS_mined_by = legitimate_PoS_block.return_mined_by()
+					is_malicious_node = "M" if devices_in_network.devices_set[PoS_mined_by].return_is_malicious() else "B"
+					file.write(f"PoS_block_mined_by: {PoS_mined_by} {is_malicious_node}\n")
+			else:
+				with open(f"{log_files_folder_path_comm_round}/stake_comm_{comm_round}.txt", "a") as file:
+					file.write(f"PoS_block_mined_by: Forking happened\n")
 
 		# save network_snapshot if reaches save frequency
 		if args['save_network_snapshots'] and (comm_round == 1 or comm_round % args['save_freq'] == 0):
