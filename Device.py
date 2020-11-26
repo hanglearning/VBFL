@@ -79,6 +79,8 @@ class Device:
 		# self.untrustworthy_miners = {} just drop the block, as later when resync, tho untrustworthy by this paticular, have to agree to most
 		# for picking PoS legitimate blockd;bs
 		# self.stake_tracker = {} # used some tricks in main.py for ease of programming
+		# used to determine the slowest device round end time to compare PoW with PoS round end time. If simulate under computation_power = 0, this may end up equaling infinity
+		self.round_end_time = 0
 		''' For workers '''
 		self.local_updates_rewards_per_transaction = 0
 		self.received_block_from_miner = None
@@ -284,6 +286,7 @@ class Device:
 		return accumulated_stake
 
 	def resync_chain(self, mining_consensus):
+		return # temporary workaround to save GPU memory
 		if mining_consensus == 'PoW':
 			self.pow_resync_chain()
 		else:
@@ -431,6 +434,7 @@ class Device:
 	# also accumulate rewards here
 	def process_block(self, block_to_process, log_files_folder_path, conn, conn_cursor, when_resync=False):
 		# collect usable updated params, malicious nodes identification, get rewards and do local udpates
+		processing_time = time.time()
 		if not self.online_switcher():
 			print(f"{self.role} {self.idx} goes offline when processing the added block. Model not updated and rewards information not upgraded. Outdated information may be obtained by this node if it never resyncs to a different chain.") # may need to set up a flag indicating if a block has been processed
 		if block_to_process:
@@ -590,6 +594,14 @@ class Device:
 					self.global_update(finally_used_local_params)
 				else:
 					print(f"Unfortunately, {self.role} {self.idx} goes offline when it's doing global_updates.")
+		processing_time = (time.time() - processing_time)/self.computation_power
+		return processing_time
+
+	def add_to_round_end_time(self, time_to_add):
+		self.round_end_time += time_to_add
+	
+	def return_round_end_time(self):
+		return self.round_end_time
 
 	def other_tasks_at_the_end_of_comm_round(self, this_comm_round, log_files_folder_path):
 		self.kick_out_slow_or_lazy_workers(this_comm_round, log_files_folder_path)
@@ -749,6 +761,7 @@ class Device:
 		self.local_update_time = None
 		self.local_total_epoch = 0
 		self.variance_of_noises.clear()
+		self.round_end_time = 0
 
 	def receive_block_from_miner(self, received_block, source_miner):
 		if not (received_block.return_mined_by() in self.black_list or source_miner in self.black_list):
@@ -816,11 +829,15 @@ class Device:
 		devices_in_association = self.miner_associated_validator_set.union(self.miner_associated_worker_set)
 		for device in devices_in_association:
 			# theoratically, one device is associated to a specific miner, so we don't have a miner_block_arrival_queue here
-			# last step, no need to track time any more
 			if self.online_switcher() and device.online_switcher():
+				miner_link_speed = self.return_link_speed()
+				device_link_speed = device.return_link_speed()
+				lower_link_speed = device_link_speed if device_link_speed < miner_link_speed else miner_link_speed
+				transmission_delay = getsizeof(str(block_to_download.__dict__))/lower_link_speed
 				verified_block, verification_time = device.verify_block(block_to_download, block_to_download.return_mined_by())
 				if verified_block:
 					device.add_block(verified_block)
+				device.add_to_round_end_time(requesting_time_point + transmission_delay + verification_time)
 			else:
 				print(f"Unfortunately, either miner {self.idx} or {device.return_idx()} goes offline while processing this request-to-download block.")
 
@@ -985,6 +1002,7 @@ class Device:
 		self.block_generation_time_point = None
 #		self.block_to_add = None
 		self.unordered_propagated_block_processing_queue.clear()
+		self.round_end_time = 0
 	
 	def set_unordered_arrival_time_accepted_validator_transactions(self, unordered_arrival_time_accepted_validator_transactions):
 		self.unordered_arrival_time_accepted_validator_transactions = unordered_arrival_time_accepted_validator_transactions
@@ -1043,6 +1061,7 @@ class Device:
 		self.final_transactions_queue_to_validate.clear()
 		self.validator_accepted_broadcasted_worker_transactions.clear()
 		self.post_validation_transactions_queue.clear()
+		self.round_end_time = 0
 
 	def add_post_validation_transaction_to_queue(self, transaction_to_add):
 		self.post_validation_transactions_queue.append(transaction_to_add)

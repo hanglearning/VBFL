@@ -92,7 +92,10 @@ class Block:
 
 	# a temporary workaround to free GPU mem by delete txs stored in the blocks. Not good when need to resync chain
 	def free_tx(self):
-		del self._transactions
+		try:
+			del self._transactions
+		except:
+			pass
 
 
 	

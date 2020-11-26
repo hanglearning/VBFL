@@ -142,6 +142,8 @@ if __name__=="__main__":
 		# 0. set program running time for logging purpose
 		date_time = datetime.now().strftime("%m%d%Y_%H%M%S")
 		log_files_folder_path = f"logs/{date_time}"
+		# on Colab
+		# log_files_folder_path = f"/content/drive/MyDrive/BFA/logs/{date_time}"
 		os.mkdir(log_files_folder_path)
 
 		# 1. save arguments used
@@ -754,7 +756,8 @@ if __name__=="__main__":
 							if miner.return_the_added_block():
 								# requesting devices in its associations to download this block
 								miner.request_to_download(verified_block, block_arrival_time + verification_time)
-								break	
+								break
+				miner.add_to_round_end_time(block_arrival_time + verification_time)
 			else:
 				print(f"{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} does not receive a propagated block and has not mined its own block yet.")
 		# CHECK FOR FORKING
@@ -781,11 +784,14 @@ if __name__=="__main__":
 			
 
 		print(''' Step 6 last step - process the added block - 1.collect usable updated params\n 2.malicious nodes identification\n 3.get rewards\n 4.do local udpates\n This code block is skipped if no valid block was generated in this round''')
+		all_devices_round_ends_time = []
 		for device in devices_list:
 			if device.return_the_added_block() and device.online_switcher():
 				# collect usable updated params, malicious nodes identification, get rewards and do local udpates
-				device.process_block(device.return_the_added_block(), log_files_folder_path, conn, conn_cursor)
+				processing_time = device.process_block(device.return_the_added_block(), log_files_folder_path, conn, conn_cursor)
 				device.other_tasks_at_the_end_of_comm_round(comm_round, log_files_folder_path)
+				device.add_to_round_end_time(processing_time)
+				all_devices_round_ends_time.append(device.return_round_end_time())
 
 		print(''' Logging Accuracies by Devices ''')
 		for device in devices_list:
@@ -795,6 +801,8 @@ if __name__=="__main__":
 				file.write(f"{device.return_idx()} {device.return_role()} {is_malicious_node}: {accuracy_this_round}\n")
 
 		# logging time, mining_consensus and forking
+		# get the slowest device end time
+		slowest_round_ends_time = max(all_devices_round_ends_time)
 		comm_round_spent_time = time.time() - comm_round_start_time
 		with open(f"{log_files_folder_path_comm_round}/accuracy_comm_{comm_round}.txt", "a") as file:
 			# corner case when all miners in this round are malicious devices so their blocks are rejected
@@ -807,6 +815,7 @@ if __name__=="__main__":
 				file.write(f"comm_round_block_gen_time: {no_block_msg}\n")
 				with open(f"{log_files_folder_path}/forking_and_no_valid_block_log.txt", 'a') as file2:
 					file2.write(f"No valid block in round {comm_round}\n")
+			file.write(f"slowest_device_round_ends_time: {slowest_round_ends_time}\n")
 			file.write(f"mining_consensus: {mining_consensus} {args['pow_difficulty']}\n")
 			file.write(f"forking_happened: {forking_happened}\n")
 			file.write(f"comm_round_spent_time_on_this_machine: {comm_round_spent_time}")
@@ -822,11 +831,19 @@ if __name__=="__main__":
 		# if PoS and no forking, log the PoS block miner
 		if mining_consensus == 'PoS':
 			if not forking_happened:
-				legitimate_PoS_block = devices_list[0].return_the_added_block()
+				legitimate_PoS_block = None
+				for device in devices_list:
+					legitimate_PoS_block = device.return_the_added_block()
+					if legitimate_PoS_block is not None:
+						# skip the device who's been identified malicious and cannot get a block from miners
+						break
 				with open(f"{log_files_folder_path_comm_round}/stake_comm_{comm_round}.txt", "a") as file:
-					PoS_mined_by = legitimate_PoS_block.return_mined_by()
-					is_malicious_node = "M" if devices_in_network.devices_set[PoS_mined_by].return_is_malicious() else "B"
-					file.write(f"PoS_block_mined_by: {PoS_mined_by} {is_malicious_node}\n")
+					if legitimate_PoS_block is None:
+						file.write("PoS_block_mined_by: Legitimate block is None\n")
+					else:
+						PoS_mined_by = legitimate_PoS_block.return_mined_by()
+						is_malicious_node = "M" if devices_in_network.devices_set[PoS_mined_by].return_is_malicious() else "B"
+						file.write(f"PoS_block_mined_by: {PoS_mined_by} {is_malicious_node}\n")
 			else:
 				with open(f"{log_files_folder_path_comm_round}/stake_comm_{comm_round}.txt", "a") as file:
 					file.write(f"PoS_block_mined_by: Forking happened\n")
