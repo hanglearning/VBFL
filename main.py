@@ -863,7 +863,7 @@ if __name__=="__main__":
 		# save network_snapshot if reaches save frequency
 		if args['save_network_snapshots'] and (comm_round == 1 or comm_round % args['save_freq'] == 0):
 			if args['save_most_recent']:
-				paths = sorted(Path(dirpath).iterdir(), key=os.path.getmtime)
+				paths = sorted(Path(network_snapshot_save_path).iterdir(), key=os.path.getmtime)
 				if len(paths) > args['save_most_recent']:
 					for _ in range(args['save_most_recent']):
 						os.remove(paths[_])
