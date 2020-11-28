@@ -137,6 +137,14 @@
 			"program": "${workspaceFolder}/plottings/draw_validator_threshold.py",
 			"console": "integratedTerminal",
 			"args": ["/Volumes/BOOTCAMP/AAAI_plots/PoS 3-20 vh=1 32 rounds/false_positive_malious_nodes_inside_slipped.txt", "/Volumes/BOOTCAMP/AAAI_plots/PoS 3-20 vh=1 32 rounds/true_positive_good_nodes_inside_correct.txt"]
+		},
+		{
+			"name": "f5_effectivesness_validation_mechanisms.py",
+			"type": "python",
+			"request": "launch",
+			"program": "${workspaceFolder}/plottings/f5_effectivesness_validation_mechanisms.py",
+			"console": "integratedTerminal",
+			"args": ["/Volumes/BOOTCAMP/AAAI_plots/VFL_nm0", "/Volumes/BOOTCAMP/AAAI_plots/PoS_0_20_vh=1", "/Volumes/BOOTCAMP/AAAI_plots/PoS_3_20_vh=0.08", "/Volumes/BOOTCAMP/AAAI_plots/VFL_nm3"]
 		}
 	]
 }

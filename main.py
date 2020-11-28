@@ -12,6 +12,9 @@
 #pow_resync_chain
 #update_model_after_chain_resync
 # TODO miner sometimes receives worker transactions directly for unknown reason - discard tx if it's not the correct type
+# TODO a chain is invalid if a malicious block is identified after this miner is identified as malicious
+# TODO Do not associate with blacklisted node. This may be done already.
+# TODO KickR continuousness should skip the rounds when nodes are not selected as workers
 
 # future work
 # TODO - non-even dataset distribution
@@ -27,6 +30,7 @@ import copy
 from sys import getsizeof
 import sqlite3
 import pickle
+from pathlib import Path
 import torch
 import torch.nn.functional as F
 from Models import Mnist_2NN, Mnist_CNN
@@ -34,18 +38,26 @@ from Device import Device, DevicesInNetwork
 from Block import Block
 from Blockchain import Blockchain
 
-NETWORK_SNAPSHOTS_BASE_FOLDER = "/work/ececis_research/chenhang/bfa_network_snapshots"
+# set program execution time for logging purpose
+date_time = datetime.now().strftime("%m%d%Y_%H%M%S")
+log_files_folder_path = f"logs/{date_time}"
+# for Google Colab, also change NETWORK_SNAPSHOTS_BASE_FOLDER
+log_files_folder_path = f"/content/drive/MyDrive/BFA/logs/{date_time}"
+os.mkdir(log_files_folder_path)
+# NETWORK_SNAPSHOTS_BASE_FOLDER = "/work/ececis_research/chenhang/bfa_network_snapshots"
+# for Colab
+NETWORK_SNAPSHOTS_BASE_FOLDER = "/content/drive/MyDrive/BFA/snapshots"
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter, description="Block_FedAvg_Simulation")
 
 # debug attributes
 parser.add_argument('-g', '--gpu', type=str, default='0', help='gpu id to use(e.g. 0,1,2,3)')
 parser.add_argument('-v', '--verbose', type=int, default=0, help='print verbose debug log')
-parser.add_argument('-sn', '--save_network_snapshots', type=int, default=0, help='only save network_snapshots if it is turned on')
+parser.add_argument('-sn', '--save_network_snapshots', type=int, default=1, help='only save network_snapshots if it is turned on')
 parser.add_argument('-dtx', '--destroy_tx_in_block', type=int, default=1, help='currently transactions stored in the blocks are occupying GPU ram and have not figured out a way to move them to CPU ram or harddisk, so turn it on to save GPU ram in order for PoS to run 100+ rounds. NOT GOOD if there needs to perform chain resyncing.')
 parser.add_argument('-sp', '--save_path', type=str, default=None, help='the saving path of network_snapshots')
 parser.add_argument('-sf', '--save_freq', type=int, default=5, help='save frequency of the network_snapshot')
-
+parser.add_argument('-sm', '--save_most_recent', type=int, default=2, help='in case of saving space, keep only the recent specified number of snapshops; 0 means keep all')
 
 # FL attributes
 parser.add_argument('-B', '--batchsize', type=int, default=10, help='local train batch size')
@@ -139,12 +151,6 @@ if __name__=="__main__":
 			miners_needed = 1
 	else:
 		''' SETTING UP FROM SCRATCH'''
-		# 0. set program running time for logging purpose
-		date_time = datetime.now().strftime("%m%d%Y_%H%M%S")
-		log_files_folder_path = f"logs/{date_time}"
-		# on Colab
-		# log_files_folder_path = f"/content/drive/MyDrive/BFA/logs/{date_time}"
-		os.mkdir(log_files_folder_path)
 
 		# 1. save arguments used
 		with open(f'{log_files_folder_path}/args_used.txt', 'w') as f:
@@ -848,14 +854,19 @@ if __name__=="__main__":
 				with open(f"{log_files_folder_path_comm_round}/stake_comm_{comm_round}.txt", "a") as file:
 					file.write(f"PoS_block_mined_by: Forking happened\n")
 
-		# save network_snapshot if reaches save frequency
-		if args['save_network_snapshots'] and (comm_round == 1 or comm_round % args['save_freq'] == 0):
-			snapshot_file_path = f"{network_snapshot_save_path}/snapshot_r_{comm_round}"
-			print(f"Saving network snapshot to {snapshot_file_path}")
-			pickle.dump(devices_in_network, open(snapshot_file_path, "wb"))
-
 		# a temporary workaround to free GPU mem by delete txs stored in the blocks. Not good when need to resync chain
 		if args['destroy_tx_in_block']:
 			for device in devices_list:
 				last_block = device.return_blockchain_object().return_last_block()
 				last_block.free_tx()
+
+		# save network_snapshot if reaches save frequency
+		if args['save_network_snapshots'] and (comm_round == 1 or comm_round % args['save_freq'] == 0):
+			if args['save_most_recent']:
+				paths = sorted(Path(dirpath).iterdir(), key=os.path.getmtime)
+				if len(paths) > args['save_most_recent']:
+					for _ in range(args['save_most_recent']):
+						os.remove(paths[_])
+			snapshot_file_path = f"{network_snapshot_save_path}/snapshot_r_{comm_round}"
+			print(f"Saving network snapshot to {snapshot_file_path}")
+			pickle.dump(devices_in_network, open(snapshot_file_path, "wb"))
