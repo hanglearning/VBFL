@@ -836,6 +836,7 @@ class Device:
 				transmission_delay = getsizeof(str(block_to_download.__dict__))/lower_link_speed
 				verified_block, verification_time = device.verify_block(block_to_download, block_to_download.return_mined_by())
 				if verified_block:
+					# forgot to check for maliciousness of the block miner
 					device.add_block(verified_block)
 				device.add_to_round_end_time(requesting_time_point + transmission_delay + verification_time)
 			else:

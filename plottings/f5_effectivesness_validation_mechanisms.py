@@ -1,3 +1,5 @@
+# shaded graph https://riptutorial.com/matplotlib/example/11221/shaded-plots
+
 # figure 5
 
 import matplotlib.pyplot as plt
@@ -11,7 +13,8 @@ import numpy as np
 log_folder_VFL_0 = sys.argv[1]
 log_folder_PoS_0_vh_1 = sys.argv[2]
 log_folder_PoS_3_vh_008 = sys.argv[3]
-log_folder_VFL_3 = sys.argv[4]
+log_folder_PoS_3_vh_008_mv = sys.argv[4]
+log_folder_VFL_3 = sys.argv[5]
 
 draw_comm_rounds = 100
 total_runs = 3
@@ -24,9 +27,10 @@ VFL_0_accuracies = {}
 VFL_3_accuracies = {}
 PoS_0_vh_1_accuracies = {}
 PoS_3_vh_008_accuracies = {}
+PoS_3_vh_008_mv_accuracies = {}
 
 VFL_log_folders = ["log_folder_VFL_0", "log_folder_VFL_3"]
-PoS_log_folders = ["log_folder_PoS_0_vh_1", "log_folder_PoS_3_vh_008"]
+PoS_log_folders = ["log_folder_PoS_0_vh_1", "log_folder_PoS_3_vh_008", "log_folder_PoS_3_vh_008_mv"]
 runs_folders = [f'run{i}' for i in range(1, total_runs+1)]
 
 for log_folder in VFL_log_folders:
@@ -64,11 +68,12 @@ VFL_0_accuracies_zip = zip(VFL_0_accuracies['run1'], VFL_0_accuracies['run2'], V
 VFL_3_accuracies_zip = zip(VFL_3_accuracies['run1'], VFL_3_accuracies['run2'], VFL_3_accuracies['run3'])
 PoS_0_vh_1_accuracies_zip = zip(PoS_0_vh_1_accuracies['run1'], PoS_0_vh_1_accuracies['run2'], PoS_0_vh_1_accuracies['run3'])
 PoS_3_vh_008_accuracies_zip = zip(PoS_3_vh_008_accuracies['run1'], PoS_3_vh_008_accuracies['run2'], PoS_3_vh_008_accuracies['run3'])
+PoS_3_vh_008_mv_accuracies_zip = zip(PoS_3_vh_008_mv_accuracies['run1'], PoS_3_vh_008_mv_accuracies['run2'], PoS_3_vh_008_mv_accuracies['run3'])
 
 # notice the order if want top to bottom label legend with specified color
-draw_vars = ["VFL_0", "PoS_0_vh_1", "PoS_3_vh_008", "VFL_3"]
-labels = ['VFL_0/20', 'VBFL_PoS_0/20_vh1.00', 'VBFL_PoS_3/20_vh0.08', 'VFL_3/20'] # labels have order in legend
-colors = ['orange', 'green', 'blue', 'red']
+draw_vars = ["VFL_0", "PoS_0_vh_1", "PoS_3_vh_008", "PoS_3_vh_008_mv", "VFL_3"]
+labels = ['VFL_0/20', 'VBFL_PoS_0/20_vh1.00', 'VBFL_PoS_3/20_vh0.08', 'VBFL_PoS_3/20_vh0.08_mv', 'VFL_3/20'] # labels have order in legend
+colors = ['orange', 'green', 'blue', 'magenta', 'red']
 # draw VFL
 for draw_var in draw_vars:
 	vars()[f'{draw_var}_draw'] = {}

@@ -15,7 +15,8 @@
 # TODO a chain is invalid if a malicious block is identified after this miner is identified as malicious
 # TODO Do not associate with blacklisted node. This may be done already.
 # TODO KickR continuousness should skip the rounds when nodes are not selected as workers
-
+# TODO update forking log after loading network snapshots
+# TODO in reuqest_to_download, forgot to check for maliciousness of the block miner
 # future work
 # TODO - non-even dataset distribution
 
@@ -31,6 +32,7 @@ from sys import getsizeof
 import sqlite3
 import pickle
 from pathlib import Path
+import shutil
 import torch
 import torch.nn.functional as F
 from Models import Mnist_2NN, Mnist_CNN
@@ -43,7 +45,6 @@ date_time = datetime.now().strftime("%m%d%Y_%H%M%S")
 log_files_folder_path = f"logs/{date_time}"
 # for Google Colab, also change NETWORK_SNAPSHOTS_BASE_FOLDER
 log_files_folder_path = f"/content/drive/MyDrive/BFA/logs/{date_time}"
-os.mkdir(log_files_folder_path)
 # NETWORK_SNAPSHOTS_BASE_FOLDER = "/work/ececis_research/chenhang/bfa_network_snapshots"
 # for Colab
 NETWORK_SNAPSHOTS_BASE_FOLDER = "/content/drive/MyDrive/BFA/snapshots"
@@ -53,9 +54,9 @@ parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFo
 # debug attributes
 parser.add_argument('-g', '--gpu', type=str, default='0', help='gpu id to use(e.g. 0,1,2,3)')
 parser.add_argument('-v', '--verbose', type=int, default=0, help='print verbose debug log')
-parser.add_argument('-sn', '--save_network_snapshots', type=int, default=1, help='only save network_snapshots if it is turned on')
+parser.add_argument('-sn', '--save_network_snapshots', type=int, default=0, help='only save network_snapshots if this is set to 1; will create a folder with date in the snapshots folder')
 parser.add_argument('-dtx', '--destroy_tx_in_block', type=int, default=1, help='currently transactions stored in the blocks are occupying GPU ram and have not figured out a way to move them to CPU ram or harddisk, so turn it on to save GPU ram in order for PoS to run 100+ rounds. NOT GOOD if there needs to perform chain resyncing.')
-parser.add_argument('-sp', '--save_path', type=str, default=None, help='the saving path of network_snapshots')
+parser.add_argument('-rp', '--resume_path', type=str, default=None, help='resume from the path of saved network_snapshots; only provide the date')
 parser.add_argument('-sf', '--save_freq', type=int, default=5, help='save frequency of the network_snapshot')
 parser.add_argument('-sm', '--save_most_recent', type=int, default=2, help='in case of saving space, keep only the recent specified number of snapshops; 0 means keep all')
 
@@ -90,7 +91,7 @@ parser.add_argument('-mv', '--malicious_validator_on', type=int, default=0, help
 # distributed system attributes
 parser.add_argument('-ns', '--network_stability', type=float, default=1.0, help='the odds a device is online')
 parser.add_argument('-els', '--even_link_speed_strength', type=int, default=1, help="This variable is used to simulate transmission delay. Default value 1 means every device is assigned to the same link speed strength -dts bytes/sec. If set to 0, link speed strength is randomly initiated between 0 and 1, meaning a device will transmit  -els*-dts bytes/sec - during experiment, one transaction is around 35k bytes.")
-parser.add_argument('-dts', '--base_data_transmission_speed', type=float, default=70000.0, help="volume of data can be transmitted per second when -els == 1. set this variable to determine transmission speed, which further determines the transmission delay - during experiment, one transaction is around 35k bytes.")
+parser.add_argument('-dts', '--base_data_transmission_speed', type=float, default=70000.0, help="volume of data can be transmitted per second when -els == 1. set this variable to determine transmission speed (bandwidth), which further determines the transmission delay - during experiment, one transaction is around 35k bytes.")
 parser.add_argument('-ecp', '--even_computation_power', type=int, default=1, help="This variable is used to simulate strength of hardware equipment. The calculation time will be shrunk down by this value. Default value 1 means evenly assign computation power to 1. If set to 0, power is randomly initiated as an int between 0 and 4, both included.")
 
 # simulation attributes
@@ -113,17 +114,19 @@ if __name__=="__main__":
 	latest_round_num = 0
 
 	''' If network_snapshot is specified, continue from left '''
-	if args['save_path']:
+	if args['resume_path']:
 		if not args['save_network_snapshots']:
 			print("NOTE: save_network_snapshots is set to 0. New network_snapshots won't be saved by conituing.")
-		network_snapshot_save_path = f"{NETWORK_SNAPSHOTS_BASE_FOLDER}/{args['save_path']}"
+		network_snapshot_save_path = f"{NETWORK_SNAPSHOTS_BASE_FOLDER}/{args['resume_path']}"
 		latest_network_snapshot_file_name = sorted([f for f in os.listdir(network_snapshot_save_path) if not f.startswith('.')], key = lambda fn: int(fn.split('_')[-1]) , reverse=True)[0]
-		print(f"Loading network snapshot from {args['save_path']}/{latest_network_snapshot_file_name}")
+		print(f"Loading network snapshot from {args['resume_path']}/{latest_network_snapshot_file_name}")
 		print("BE CAREFUL - loaded dev env must be the same as the current dev env, namely, cpu, gpu or gpu parallel")
 		latest_round_num = int(latest_network_snapshot_file_name.split('_')[-1])
 		devices_in_network = pickle.load(open(f"{network_snapshot_save_path}/{latest_network_snapshot_file_name}", "rb"))
 		devices_list = list(devices_in_network.devices_set.values())
-		log_files_folder_path = f"logs/{args['save_path']}"
+		log_files_folder_path = f"logs/{args['resume_path']}"
+		# for colab
+		log_files_folder_path = f"/content/drive/MyDrive/BFA/logs/{args['resume_path']}"
 		# original arguments file
 		args_used_file = f"{log_files_folder_path}/args_used.txt"
 		file = open(args_used_file,"r") 
@@ -136,6 +139,9 @@ if __name__=="__main__":
 			# get number of roles
 			if line.startswith('--hard_assign'):
 				roles_requirement = line.split(" ")[-1].split(',')
+			# get mining consensus
+			if line.startswith('--pow_difficulty'):
+				mining_consensus = 'PoW' if int(line.split(" ")[-1]) else 'PoS'
 		# determine roles to assign
 		try:
 			workers_needed = int(roles_requirement[0])
@@ -151,6 +157,8 @@ if __name__=="__main__":
 			miners_needed = 1
 	else:
 		''' SETTING UP FROM SCRATCH'''
+		# 0. create log_files_folder_path if not resume
+		os.mkdir(log_files_folder_path)
 
 		# 1. save arguments used
 		with open(f'{log_files_folder_path}/args_used.txt', 'w') as f:
@@ -267,6 +275,9 @@ if __name__=="__main__":
 	for comm_round in range(latest_round_num + 1, args['max_num_comm']+1):
 		# create round specific log folder
 		log_files_folder_path_comm_round = f"{log_files_folder_path}/comm_{comm_round}"
+		if os.path.exists(log_files_folder_path_comm_round):
+			print(f"Deleting {log_files_folder_path_comm_round} and create a new one.")
+			shutil.rmtree(log_files_folder_path_comm_round)
 		os.mkdir(log_files_folder_path_comm_round)
 		# free cuda memory
 		if dev == torch.device("cuda"):
@@ -808,7 +819,6 @@ if __name__=="__main__":
 
 		# logging time, mining_consensus and forking
 		# get the slowest device end time
-		slowest_round_ends_time = max(all_devices_round_ends_time)
 		comm_round_spent_time = time.time() - comm_round_start_time
 		with open(f"{log_files_folder_path_comm_round}/accuracy_comm_{comm_round}.txt", "a") as file:
 			# corner case when all miners in this round are malicious devices so their blocks are rejected
@@ -820,12 +830,39 @@ if __name__=="__main__":
 				print(no_block_msg)
 				file.write(f"comm_round_block_gen_time: {no_block_msg}\n")
 				with open(f"{log_files_folder_path}/forking_and_no_valid_block_log.txt", 'a') as file2:
+					# TODO this may be caused by "no transaction to mine" for the miner. Forgot to check for block miner's maliciousness in request_to_downlaod()
 					file2.write(f"No valid block in round {comm_round}\n")
-			file.write(f"slowest_device_round_ends_time: {slowest_round_ends_time}\n")
+			try:
+				slowest_round_ends_time = max(all_devices_round_ends_time)
+				file.write(f"slowest_device_round_ends_time: {slowest_round_ends_time}\n")
+			except:
+				# corner case when all transactions are rejected by miners
+				file.write("slowest_device_round_ends_time: No valid block has been generated this round.\n")
+				with open(f"{log_files_folder_path}/forking_and_no_valid_block_log.txt", 'a') as file2:
+					file2.write(f"No valid block in round {comm_round}\n")
 			file.write(f"mining_consensus: {mining_consensus} {args['pow_difficulty']}\n")
 			file.write(f"forking_happened: {forking_happened}\n")
-			file.write(f"comm_round_spent_time_on_this_machine: {comm_round_spent_time}")
+			file.write(f"comm_round_spent_time_on_this_machine: {comm_round_spent_time}\n")
 		conn.commit()
+
+		# if no forking, log the block miner
+		if not forking_happened:
+			legitimate_block = None
+			for device in devices_list:
+				legitimate_block = device.return_the_added_block()
+				if legitimate_block is not None:
+					# skip the device who's been identified malicious and cannot get a block from miners
+					break
+			with open(f"{log_files_folder_path_comm_round}/accuracy_comm_{comm_round}.txt", "a") as file:
+				if legitimate_block is None:
+					file.write("block_mined_by: no valid block generated this round\n")
+				else:
+					block_mined_by = legitimate_block.return_mined_by()
+					is_malicious_node = "M" if devices_in_network.devices_set[block_mined_by].return_is_malicious() else "B"
+					file.write(f"block_mined_by: {block_mined_by} {is_malicious_node}\n")
+		else:
+			with open(f"{log_files_folder_path_comm_round}/accuracy_comm_{comm_round}.txt", "a") as file:
+				file.write(f"block_mined_by: Forking happened\n")
 
 		print(''' Logging Stake by Devices ''')
 		for device in devices_list:
@@ -833,26 +870,6 @@ if __name__=="__main__":
 			with open(f"{log_files_folder_path_comm_round}/stake_comm_{comm_round}.txt", "a") as file:
 				is_malicious_node = "M" if device.return_is_malicious() else "B"
 				file.write(f"{device.return_idx()} {device.return_role()} {is_malicious_node}: {device.return_stake()}\n")
-				
-		# if PoS and no forking, log the PoS block miner
-		if mining_consensus == 'PoS':
-			if not forking_happened:
-				legitimate_PoS_block = None
-				for device in devices_list:
-					legitimate_PoS_block = device.return_the_added_block()
-					if legitimate_PoS_block is not None:
-						# skip the device who's been identified malicious and cannot get a block from miners
-						break
-				with open(f"{log_files_folder_path_comm_round}/stake_comm_{comm_round}.txt", "a") as file:
-					if legitimate_PoS_block is None:
-						file.write("PoS_block_mined_by: Legitimate block is None\n")
-					else:
-						PoS_mined_by = legitimate_PoS_block.return_mined_by()
-						is_malicious_node = "M" if devices_in_network.devices_set[PoS_mined_by].return_is_malicious() else "B"
-						file.write(f"PoS_block_mined_by: {PoS_mined_by} {is_malicious_node}\n")
-			else:
-				with open(f"{log_files_folder_path_comm_round}/stake_comm_{comm_round}.txt", "a") as file:
-					file.write(f"PoS_block_mined_by: Forking happened\n")
 
 		# a temporary workaround to free GPU mem by delete txs stored in the blocks. Not good when need to resync chain
 		if args['destroy_tx_in_block']:
@@ -865,7 +882,10 @@ if __name__=="__main__":
 			if args['save_most_recent']:
 				paths = sorted(Path(network_snapshot_save_path).iterdir(), key=os.path.getmtime)
 				if len(paths) > args['save_most_recent']:
-					for _ in range(args['save_most_recent']):
+					for _ in range(len(paths) - args['save_most_recent']):
+						# make it 0 byte as os.remove() moves file to the bin but may still take space
+						# https://stackoverflow.com/questions/53028607/how-to-remove-the-file-from-trash-in-drive-in-colab
+						open(paths[_], 'w').close() 
 						os.remove(paths[_])
 			snapshot_file_path = f"{network_snapshot_save_path}/snapshot_r_{comm_round}"
 			print(f"Saving network snapshot to {snapshot_file_path}")

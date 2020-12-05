@@ -1,5 +1,5 @@
 {
-	"python.pythonPath": "/Users/chenhang91/.pyenv/versions/anaconda3-5.3.0/envs/blockchain/bin/python",
+	"python.pythonPath": "/Users/chenhang91/.pyenv/versions/anaconda3-5.3.0/envs/tabular/bin/python",
 	"editor.insertSpaces": false,
 	"editor.tabSize": 4,
 	"editor.detectIndentation": true
