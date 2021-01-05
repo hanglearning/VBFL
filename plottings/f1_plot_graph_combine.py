@@ -86,9 +86,9 @@ PoS_3_vh_008_run1_accuracies = PoS_3_vh_008_run1_accuracies[:draw_comm_rounds]
 
 # draw graphs over all available comm rounds
 # plt.xticks(range(draw_comm_rounds), [i for i in range(1, draw_comm_rounds + 1)], rotation=90)
-plt.plot(range(draw_comm_rounds), m_device_accuracies_across_rounds, label=f'vanilla FL {total_malicious_devices} out of {total_devices} malicious devices')
-plt.plot(range(draw_comm_rounds), b_device_accuracies_across_rounds, label=f'vanilla FL all {total_devices} legitimate devices')
-plt.plot(range(draw_comm_rounds), PoS_3_vh_008_run1_accuracies, label=r'VBFL 3 out of 20 malicious devices')
+plt.plot(range(draw_comm_rounds), b_device_accuracies_across_rounds, label=f'Vanilla FL all {total_devices} legitimate devices', color='orange')
+plt.plot(range(draw_comm_rounds), PoS_3_vh_008_run1_accuracies, label=r'VBFL 3 out of 20 malicious devices', color='green')
+plt.plot(range(draw_comm_rounds), m_device_accuracies_across_rounds, label=f'Vanilla FL {total_malicious_devices} out of {total_devices} malicious devices', color='blue')
 #plt.plot(range(draw_comm_rounds), a_device_accuracies_across_rounds, label=f'all {total_devices} benigh PoS')
 
 if b_device_accuracies_across_rounds:

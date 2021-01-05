@@ -74,6 +74,6 @@ plt.axis((x1,x2,0,10000))
 plt.legend(loc='b', fontsize='small')
 plt.xlabel('Communication Round')
 plt.ylabel('Seconds')
-plt.title('Comparison of the SRC-Time between PoW and VBFL-PoS')
+plt.title('Comparison of SRC-Time between PoW and VBFL-PoS')
 
 plt.show()

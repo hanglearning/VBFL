@@ -1,3 +1,5 @@
+# vad (validation accuracy difference)
+
 import matplotlib.pyplot as plt
 import sys
 import matplotlib.patches as mpatches
@@ -11,7 +13,7 @@ malious_nodes_inside_slipped = {}
 good_nodes_inside_correct = {}
 
 draw_comm_rounds = 10
-plt.figure(dpi=150)
+plt.figure(dpi=250)
 
 file = open(false_positive_malious_nodes_inside_slipped,"r") 
 log_whole_text = file.read() 
@@ -56,7 +58,7 @@ plt.yticks([-0.2, -0.15, -0.1, -0.05, 0, 0.05, 0.08, 0.1, 0.15, 0.2], ["-0.20", 
 
 plt.xlabel('Communication Round')
 plt.ylabel(r'$vad = A^v(L_j^v(1)) - A^v(L_j^w(n))$', fontsize = 12)
-plt.title("Validator's Accuracy Difference")
+plt.title("Validation Accuracy Difference")
 line1 = Line2D(range(1), range(1), color="white", marker='o', markerfacecolor="red")
 line2 = Line2D(range(1), range(1), color="white", marker='o',markerfacecolor="green")
 

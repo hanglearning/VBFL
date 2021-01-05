@@ -50,7 +50,7 @@ colors = ['orange', 'green', 'blue', 'magenta', 'red']
 for draw_var_iter in range(len(draw_vars_forking)):
 	draw_var = draw_vars_forking[draw_var_iter]
 	for draw_point in vars()[draw_var]:
-		plt.plot(draw_point, len(draw_vars_forking) - draw_var_iter - 1, 'o', color=colors[draw_var_iter])
+		plt.plot(draw_point, len(draw_vars_forking) - draw_var_iter - 1, 'o', color=colors[draw_var_iter], mfc='none')
 
 for draw_var_iter in range(len(draw_vars_no_valid_block)):
 	draw_var = draw_vars_no_valid_block[draw_var_iter]

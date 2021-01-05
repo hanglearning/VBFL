@@ -73,7 +73,7 @@ PoS_3_vh_008_mv_accuracies_zip = zip(PoS_3_vh_008_mv_accuracies['run1'], PoS_3_v
 # notice the order if want top to bottom label legend with specified color
 draw_vars = ["VFL_0", "PoS_0_vh_1", "PoS_3_vh_008", "PoS_3_vh_008_mv", "VFL_3"]
 labels = ['VFL_0/20', 'VBFL_PoS_0/20_vh1.00', 'VBFL_PoS_3/20_vh0.08', 'VBFL_PoS_3/20_vh0.08_mv', 'VFL_3/20'] # labels have order in legend
-colors = ['orange', 'green', 'blue', 'magenta', 'red']
+colors = ['orange', 'green', 'blue', 'brown', 'red']
 # draw VFL
 for draw_var in draw_vars:
 	vars()[f'{draw_var}_draw'] = {}
