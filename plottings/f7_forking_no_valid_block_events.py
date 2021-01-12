@@ -41,7 +41,7 @@ draw_vars_forking = [f"{var}_forking" for var in vars_names]
 draw_vars_no_valid_block = [f"{var}_no_valid_block" for var in vars_names]
 
 # from bottom to top
-y_axis_labels = ["POW_D2", "POW_D1", "POS_r1", "POS_r2", "POS_r3"][::-1]
+y_axis_labels = ["PoW_d2", "PoW_d1", "PoS_e1", "PoS_e2", "PoS_e3"][::-1]
 plt.yticks(range(len(y_axis_labels)), y_axis_labels)
 # labels = ['VBFL_PoW_3/20_vh0.08_D_2', 'VBFL_PoW_3/20_vh0.08_D_1', 'VBFL_PoS_3/20_vh0.08_run1', 'VBFL_PoS_3/20_vh0.08_run2', 'VBFL_PoS_3/20_vh0.08_run3'] # labels have order in legend
 colors = ['orange', 'green', 'blue', 'magenta', 'red']
@@ -62,7 +62,7 @@ plt.axis((0,100,y1,y2))
 
 # plt.legend(loc='b', fontsize='small')
 plt.xlabel('Communication Round')
-plt.ylabel('Setup')
+plt.ylabel('Consensus')
 plt.title('Forking and No_Valid_Block Event Indicator')
 
 plt.show()

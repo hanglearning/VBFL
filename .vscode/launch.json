@@ -26,15 +26,15 @@
 			"request": "launch",
 			"program": "${workspaceFolder}/plottings/f1_plot_graph_combine.py",
 			"console": "integratedTerminal",
-			"args": ["/Volumes/BOOTCAMP/AAAI_plots/VFL_nm0/run1", "/Volumes/BOOTCAMP/AAAI_plots/VFL_nm3/run2", , "/Volumes/BOOTCAMP/AAAI_plots/Archived/PoS_3_20_vh=0.08/run1"]
+			"args": ["${workspaceFolder}/plotting_logs/VFL_nm0/run1", "${workspaceFolder}/plotting_logs/VFL_nm3/run2", "${workspaceFolder}/plotting_logs/old_PoS_3_20_vh=0.08/run1"]
 		},
 		{
-			"name": "f3_plot_local_model_learning_with_global_VFL_combine_malicious.py",
+			"name": "f3_device_overall_learning_curve_VFL.py",
 			"type": "python",
 			"request": "launch",
-			"program": "${workspaceFolder}/plottings/f3_plot_local_model_learning_with_global_VFL_combine_malicious.py",
+			"program": "${workspaceFolder}/plottings/f3_device_overall_learning_curve_VFL.py",
 			"console": "integratedTerminal",
-			"args": ["/Users/chenhang91/TEMP/AAAI draw log/10202020_055020 VFL with Noisy Acc"]
+			"args": ["${workspaceFolder}/plotting_logs/VFL_nm0/run1"]
 		},
 		{
 			"name": "f4_choice_of_vh.py",
@@ -42,7 +42,7 @@
 			"request": "launch",
 			"program": "${workspaceFolder}/plottings/f4_choice_of_vh.py",
 			"console": "integratedTerminal",
-			"args": ["/Volumes/BOOTCAMP/AAAI_plots/PoS 3-20 vh=1 32 rounds/false_positive_malious_nodes_inside_slipped.txt", "/Volumes/BOOTCAMP/AAAI_plots/PoS 3-20 vh=1 32 rounds/true_positive_good_nodes_inside_correct.txt"]
+			"args": ["${workspaceFolder}/plotting_logs/PoS 3-20 vh=1 32 rounds/false_positive_malious_nodes_inside_slipped.txt", "${workspaceFolder}/plotting_logs/PoS 3-20 vh=1 32 rounds/true_positive_good_nodes_inside_correct.txt"]
 		},
 		{
 			"name": "f5_effectivesness_validation_mechanisms.py",
@@ -50,7 +50,7 @@
 			"request": "launch",
 			"program": "${workspaceFolder}/plottings/f5_effectivesness_validation_mechanisms.py",
 			"console": "integratedTerminal",
-			"args": ["/Volumes/BOOTCAMP/AAAI_plots/VFL_nm0", "/Volumes/BOOTCAMP/AAAI_plots/PoS_0_20_vh=1", "/Volumes/BOOTCAMP/AAAI_plots/PoS_3_20_vh=0.08", "/Volumes/BOOTCAMP/AAAI_plots/PoS_3_20_vh=0.08_Malicious_Validator", "/Volumes/BOOTCAMP/AAAI_plots/VFL_nm3"]
+			"args": ["${workspaceFolder}/plotting_logs/VFL_nm0", "${workspaceFolder}/plotting_logs/PoS_0_20_vh=1", "${workspaceFolder}/plotting_logs/PoS_3_20_vh=0.08", "${workspaceFolder}/plotting_logs/PoS_3_20_vh=0.08_Malicious_Validator", "${workspaceFolder}/plotting_logs/VFL_nm3"]
 		},
 		{
 			"name": "f6_src_block_gen_time.py",
@@ -58,7 +58,7 @@
 			"request": "launch",
 			"program": "${workspaceFolder}/plottings/f6_src_block_gen_time.py",
 			"console": "integratedTerminal",
-			"args": ["/Volumes/BOOTCAMP/AAAI_plots/PoS_3_20_vh=0.08/run1", "/Volumes/BOOTCAMP/AAAI_plots/PoS_3_20_vh=0.08/run2", "/Volumes/BOOTCAMP/AAAI_plots/PoS_3_20_vh=0.08/run3", "/Volumes/BOOTCAMP/AAAI_plots/PoW/PoW_1", "/Volumes/BOOTCAMP/AAAI_plots/PoW/PoW_2"]
+			"args": ["${workspaceFolder}/plotting_logs/PoS_3_20_vh=0.08/run1", "${workspaceFolder}/plotting_logs/PoS_3_20_vh=0.08/run2", "${workspaceFolder}/plotting_logs/PoS_3_20_vh=0.08/run3", "${workspaceFolder}/plotting_logs/PoW/PoW_1", "${workspaceFolder}/plotting_logs/PoW/PoW_2"]
 		},
 		{
 			"name": "f7_forking_no_valid_block_events.py",
@@ -66,7 +66,7 @@
 			"request": "launch",
 			"program": "${workspaceFolder}/plottings/f7_forking_no_valid_block_events.py",
 			"console": "integratedTerminal",
-			"args": ["/Volumes/BOOTCAMP/AAAI_plots/PoS_3_20_vh=0.08/run1", "/Volumes/BOOTCAMP/AAAI_plots/PoS_3_20_vh=0.08/run2", "/Volumes/BOOTCAMP/AAAI_plots/PoS_3_20_vh=0.08/run3", "/Volumes/BOOTCAMP/AAAI_plots/PoW/PoW_1", "/Volumes/BOOTCAMP/AAAI_plots/PoW/PoW_2"]
+			"args": ["${workspaceFolder}/plotting_logs/PoS_3_20_vh=0.08/run1", "${workspaceFolder}/plotting_logs/PoS_3_20_vh=0.08/run2", "${workspaceFolder}/plotting_logs/PoS_3_20_vh=0.08/run3", "${workspaceFolder}/plotting_logs/PoW/PoW_1", "${workspaceFolder}/plotting_logs/PoW/PoW_2"]
 		},
 		{
 			"name": "f8_miner_selection.py",
@@ -74,7 +74,7 @@
 			"request": "launch",
 			"program": "${workspaceFolder}/plottings/f8_miner_selection.py",
 			"console": "integratedTerminal",
-			"args": ["/Volumes/BOOTCAMP/AAAI_plots/PoS_3_20_vh=0.08/run1", "/Volumes/BOOTCAMP/AAAI_plots/PoS_3_20_vh=0.08/run2", "/Volumes/BOOTCAMP/AAAI_plots/PoS_3_20_vh=0.08/run3", "/Volumes/BOOTCAMP/AAAI_plots/PoW/PoW_1", "/Volumes/BOOTCAMP/AAAI_plots/PoW/PoW_2"]
+			"args": ["${workspaceFolder}/plotting_logs/PoS_3_20_vh=0.08/run1", "${workspaceFolder}/plotting_logs/PoS_3_20_vh=0.08/run2", "${workspaceFolder}/plotting_logs/PoS_3_20_vh=0.08/run3", "${workspaceFolder}/plotting_logs/PoW/PoW_1", "${workspaceFolder}/plotting_logs/PoW/PoW_2"]
 		},
 		{
 			"name": "f9_PoS_stake_curve.py",
@@ -82,7 +82,7 @@
 			"request": "launch",
 			"program": "${workspaceFolder}/plottings/f9_PoS_stake_curve.py",
 			"console": "integratedTerminal",
-			"args": ["/Volumes/BOOTCAMP/AAAI_plots/PoS_3_20_vh=0.08/run1", "/Volumes/BOOTCAMP/AAAI_plots/PoS_3_20_vh=0.08/run2", "/Volumes/BOOTCAMP/AAAI_plots/PoS_3_20_vh=0.08/run3", "/Volumes/BOOTCAMP/AAAI_plots/PoW/PoW_1", "/Volumes/BOOTCAMP/AAAI_plots/PoW/PoW_2"]
+			"args": ["${workspaceFolder}/plotting_logs/PoS_3_20_vh=0.08/run1", "${workspaceFolder}/plotting_logs/PoS_3_20_vh=0.08/run2", "${workspaceFolder}/plotting_logs/PoS_3_20_vh=0.08/run3", "${workspaceFolder}/plotting_logs/PoW/PoW_1", "${workspaceFolder}/plotting_logs/PoW/PoW_2"]
 		},
 		{
 			"name": "f10_diff_malicious_nodes_WVM_combination.py",
@@ -90,7 +90,7 @@
 			"request": "launch",
 			"program": "${workspaceFolder}/plottings/f10_diff_malicious_nodes_WVM_combination.py",
 			"console": "integratedTerminal",
-			"args": ["/Volumes/BOOTCAMP/AAAI_plots/PoS 3 20 0.08 diff # malicious nodes/12 5 3", "/Volumes/BOOTCAMP/AAAI_plots/PoS 3 20 0.08 diff # malicious nodes/9 8 3"]
+			"args": ["${workspaceFolder}/plotting_logs/PoS 3 20 0.08 diff # malicious nodes/12 5 3", "${workspaceFolder}/plotting_logs/PoS 3 20 0.08 diff # malicious nodes/9 8 3"]
 		},
 		{
 			"name": "crop_white_on_plots.py",
@@ -98,7 +98,7 @@
 			"request": "launch",
 			"program": "${workspaceFolder}/plottings/crop_white_on_plots.py",
 			"console": "integratedTerminal",
-			"args": ["/Volumes/BOOTCAMP/AAAI_plots/f5_effectivesness_validation_mechanisms.png"]
+			"args": ["${workspaceFolder}/plotting_logs/f5_effectivesness_validation_mechanisms.png"]
 		}
 		
 	]

@@ -62,7 +62,7 @@ class Block:
 
 	def add_verified_transaction(self, transaction):
 		# after verified in cross_verification()
-		# transactions can be both worker' or validators' transactions
+		# transactions can be both workers' or validators' transactions
 		self._transactions.append(transaction)
 
 	def set_nonce(self, nonce):

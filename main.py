@@ -6,7 +6,7 @@
 # TODO let's not remove peers because of offline as peers may go back online later, instead just check if they are online or offline. Only remove peers if they are malicious. In real distributed network, remove peers if cannot reach for a long period of time
 # assume no resending transaction mechanism if a transaction is lost due to offline or time out. most of the time, unnecessary because workers always send the newer updates, if it's not the last worker's updates
 # assume just skip verifying a transaction if offline, in reality it may continue to verify what's left
-# PoS also uses PoW resync chain - the longest chain
+# PoS also uses resync chain - the longest chain
 # only focus on catch malicious worker
 # TODO need to make changes in these functions on Sunday
 #pow_resync_chain
@@ -43,11 +43,10 @@ from Blockchain import Blockchain
 # set program execution time for logging purpose
 date_time = datetime.now().strftime("%m%d%Y_%H%M%S")
 log_files_folder_path = f"logs/{date_time}"
-# for Google Colab, also change NETWORK_SNAPSHOTS_BASE_FOLDER
-log_files_folder_path = f"/content/drive/MyDrive/BFA/logs/{date_time}"
-# NETWORK_SNAPSHOTS_BASE_FOLDER = "/work/ececis_research/chenhang/bfa_network_snapshots"
-# for Colab
-NETWORK_SNAPSHOTS_BASE_FOLDER = "/content/drive/MyDrive/BFA/snapshots"
+NETWORK_SNAPSHOTS_BASE_FOLDER = "snapshots"
+# for running on Google Colab
+# log_files_folder_path = f"/content/drive/MyDrive/BFA/logs/{date_time}"
+# NETWORK_SNAPSHOTS_BASE_FOLDER = "/content/drive/MyDrive/BFA/snapshots"
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter, description="Block_FedAvg_Simulation")
 
@@ -74,7 +73,7 @@ parser.add_argument('-nv', '--noise_variance', type=int, default=1, help="noise 
 parser.add_argument('-le', '--default_local_epochs', type=int, default=5, help='local train epoch. Train local model by this same num of epochs for each worker, if -mt is not specified')
 
 # blockchain system consensus attributes
-parser.add_argument('-gr', '--general_rewards', type=int, default=1, help='rewards for providing data, verification of one transaction, mining and so forth')
+parser.add_argument('-ur', '--unit_reward', type=int, default=1, help='unit reward for providing data, verification of signature, validation and so forth')
 parser.add_argument('-ko', '--knock_out_rounds', type=int, default=3, help="a worker or validator device is kicked out of the device's peer list(put in black list) if it's identified as malicious for this number of rounds")
 parser.add_argument('-lo', '--lazy_worker_knock_out_rounds', type=int, default=6, help="a worker device is kicked out of the device's peer list(put in black list) if it does not provide updates for this number of rounds, due to too slow or just lazy to do updates and only accept the model udpates.(do not care lazy validator or miner as they will just not receive rewards)")
 parser.add_argument('-pow', '--pow_difficulty', type=int, default=0, help="if set to 0, meaning miners are using PoS")
@@ -97,7 +96,7 @@ parser.add_argument('-ecp', '--even_computation_power', type=int, default=1, hel
 # simulation attributes
 parser.add_argument('-ha', '--hard_assign', type=str, default='*,*,*', help='hard assign number of roles in the network, order by worker, validator and miner')
 parser.add_argument('-aio', '--all_in_one', type=int, default=0, help='let all nodes be aware of each other in the network while registering')
-
+parser.add_argument('-cs', '--check_signature', type=int, default=0, help='if set to 0, all signatures are assumed to be verified to save execution time')
 
 # parser.add_argument('-la', '--least_assign', type=str, default='*,*,*', help='the assigned number of roles are at least guaranteed in the network')
 
@@ -126,7 +125,7 @@ if __name__=="__main__":
 		devices_list = list(devices_in_network.devices_set.values())
 		log_files_folder_path = f"logs/{args['resume_path']}"
 		# for colab
-		log_files_folder_path = f"/content/drive/MyDrive/BFA/logs/{args['resume_path']}"
+		# log_files_folder_path = f"/content/drive/MyDrive/BFA/logs/{args['resume_path']}"
 		# original arguments file
 		args_used_file = f"{log_files_folder_path}/args_used.txt"
 		file = open(args_used_file,"r") 
@@ -134,7 +133,7 @@ if __name__=="__main__":
 		lines_list = log_whole_text.split("\n")
 		for line in lines_list:
 			# abide by the original specified rewards
-			if line.startswith('--general_rewards'):
+			if line.startswith('--unit_reward'):
 				rewards = int(line.split(" ")[-1])
 			# get number of roles
 			if line.startswith('--hard_assign'):
@@ -157,6 +156,7 @@ if __name__=="__main__":
 			miners_needed = 1
 	else:
 		''' SETTING UP FROM SCRATCH'''
+		
 		# 0. create log_files_folder_path if not resume
 		os.mkdir(log_files_folder_path)
 
@@ -175,7 +175,7 @@ if __name__=="__main__":
 
 		# 3. assign system variables
 		# for demonstration purposes, this reward is for every rewarded action
-		rewards = args["general_rewards"]
+		rewards = args["unit_reward"]
 		
 		# 4. get number of roles needed in the network
 		roles_requirement = args['hard_assign'].split(',')
@@ -225,12 +225,11 @@ if __name__=="__main__":
 		print(f"{torch.cuda.device_count()} GPUs are available to use!")
 		net = net.to(dev)
 
-
 		# 8. set loss_function
 		loss_func = F.cross_entropy
 
 		# 9. create devices in the network
-		devices_in_network = DevicesInNetwork(data_set_name='mnist', is_iid=args['IID'], batch_size = args['batchsize'], learning_rate =  args['learning_rate'], loss_func = loss_func, opti = args['optimizer'], num_devices=num_devices, network_stability=args['network_stability'], net=net, dev=dev, knock_out_rounds=args['knock_out_rounds'], lazy_worker_knock_out_rounds=args['lazy_worker_knock_out_rounds'], shard_test_data=args['shard_test_data'], miner_acception_wait_time=args['miner_acception_wait_time'], miner_accepted_transactions_size_limit=args['miner_accepted_transactions_size_limit'], validator_threshold=args['validator_threshold'], pow_difficulty=args['pow_difficulty'], even_link_speed_strength=args['even_link_speed_strength'], base_data_transmission_speed=args['base_data_transmission_speed'], even_computation_power=args['even_computation_power'], malicious_updates_discount=args['malicious_updates_discount'], num_malicious=num_malicious, noise_variance=args['noise_variance'])
+		devices_in_network = DevicesInNetwork(data_set_name='mnist', is_iid=args['IID'], batch_size = args['batchsize'], learning_rate =  args['learning_rate'], loss_func = loss_func, opti = args['optimizer'], num_devices=num_devices, network_stability=args['network_stability'], net=net, dev=dev, knock_out_rounds=args['knock_out_rounds'], lazy_worker_knock_out_rounds=args['lazy_worker_knock_out_rounds'], shard_test_data=args['shard_test_data'], miner_acception_wait_time=args['miner_acception_wait_time'], miner_accepted_transactions_size_limit=args['miner_accepted_transactions_size_limit'], validator_threshold=args['validator_threshold'], pow_difficulty=args['pow_difficulty'], even_link_speed_strength=args['even_link_speed_strength'], base_data_transmission_speed=args['base_data_transmission_speed'], even_computation_power=args['even_computation_power'], malicious_updates_discount=args['malicious_updates_discount'], num_malicious=num_malicious, noise_variance=args['noise_variance'], check_signature=args['check_signature'], not_resync_chain=args['destroy_tx_in_block'])
 		del net
 		devices_list = list(devices_in_network.devices_set.values())
 
@@ -369,7 +368,7 @@ if __name__=="__main__":
 		print(''' Step 1 - workers assign associated miner and validator (and do local updates, but it is implemented in code block of step 2) \n''')
 		for worker_iter in range(len(workers_this_round)):
 			worker = workers_this_round[worker_iter]
-			# PoW resync chain(block could be dropped due to fork from last round)
+			# resync chain(block could be dropped due to fork from last round)
 			if worker.resync_chain(mining_consensus):
 				worker.update_model_after_chain_resync(log_files_folder_path_comm_round, conn, conn_cursor)
 			# worker (should) perform local update and associate
@@ -392,7 +391,7 @@ if __name__=="__main__":
 		print(''' Step 2 - validators accept local updates and broadcast to other validators in their respective peer lists (workers local_updates() are called in this step.\n''')
 		for validator_iter in range(len(validators_this_round)):
 			validator = validators_this_round[validator_iter]
-			# PoW resync chain
+			# resync chain
 			if validator.resync_chain(mining_consensus):
 				validator.update_model_after_chain_resync(log_files_folder_path, conn, conn_cursor)
 			# associate with a miner to send post validation transactions
@@ -551,7 +550,7 @@ if __name__=="__main__":
 		print(''' Step 4 - validators send post validation transactions to associated miner and miner broadcasts these to other miners in their respecitve peer lists\n''')
 		for miner_iter in range(len(miners_this_round)):
 			miner = miners_this_round[miner_iter]
-			# PoW resync chain
+			# resync chain
 			if miner.resync_chain(mining_consensus):
 				miner.update_model_after_chain_resync(log_files_folder_path, conn, conn_cursor)
 			print(f"{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} accepting validators' post-validation transactions...")
@@ -729,7 +728,6 @@ if __name__=="__main__":
 			if ordered_all_blocks_processing_queue:
 				if mining_consensus == 'PoW':
 					print("\nselect winning block based on PoW")
-					# should not depend on min time selection
 					# abort mining if propagated block is received
 					print(f"{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} is deciding if a valid propagated block arrived before it successfully mines its own block...")
 					for (block_arrival_time, block_to_verify) in ordered_all_blocks_processing_queue:
@@ -793,7 +791,6 @@ if __name__=="__main__":
 		if len(added_blocks_miner_set) > 1:
 			print("WARNING: a forking event just happened!")
 			forking_happened = True
-			# cont = input("Press any key to continue")
 			with open(f"{log_files_folder_path}/forking_and_no_valid_block_log.txt", 'a') as file:
 				file.write(f"Forking in round {comm_round}\n")
 		else:
@@ -839,7 +836,9 @@ if __name__=="__main__":
 				# corner case when all transactions are rejected by miners
 				file.write("slowest_device_round_ends_time: No valid block has been generated this round.\n")
 				with open(f"{log_files_folder_path}/forking_and_no_valid_block_log.txt", 'a') as file2:
-					file2.write(f"No valid block in round {comm_round}\n")
+					no_valid_block_msg = f"No valid block in round {comm_round}\n"
+					if file2.readlines()[-1] != no_valid_block_msg:
+						file2.write(no_valid_block_msg)
 			file.write(f"mining_consensus: {mining_consensus} {args['pow_difficulty']}\n")
 			file.write(f"forking_happened: {forking_happened}\n")
 			file.write(f"comm_round_spent_time_on_this_machine: {comm_round_spent_time}\n")

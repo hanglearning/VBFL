@@ -58,15 +58,14 @@ for round_iter in all_rounds:
 draw_vars_malicious = [f"{var}_malicious" for var in vars_names]
 
 # from bottom to top
-y_axis_labels = ["POW_D2", "POW_D1", "POS_r1", "POS_r2", "POS_r3"][::-1]
+y_axis_labels = ["PoW_d2", "PoW_d1", "PoS_e1", "PoS_e2", "PoS_e3"][::-1]
 plt.yticks(range(len(y_axis_labels)), y_axis_labels)
 colors = ['orange', 'green', 'blue', 'magenta', 'red']
 
-# draw forking and no valid block
 for draw_var_iter in range(len(draw_vars_malicious)):
 	draw_var = draw_vars_malicious[draw_var_iter]
 	for draw_point in vars()[draw_var]:
-		plt.plot(draw_point, len(draw_vars_malicious) - draw_var_iter - 1, 'o', color=colors[draw_var_iter])
+		plt.plot(draw_point, len(draw_vars_malicious) - draw_var_iter - 1, 'o', color=colors[draw_var_iter], mfc='none')
 # no malicious for 3 PoS run
 plt.scatter(0, 0, color='white')
 plt.scatter(0, 1, color='white')
@@ -77,7 +76,7 @@ plt.axis((0,100,y1,y2))
 
 # plt.legend(loc='b', fontsize='small')
 plt.xlabel('Communication Round')
-plt.ylabel('Setup')
+plt.ylabel('Consensus')
 plt.title('Events of Legitimate Block Mined by Malicious Device')
 
 plt.show()

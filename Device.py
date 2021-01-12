@@ -10,15 +10,15 @@ import copy
 import time
 from sys import getsizeof
 # https://cryptobook.nakov.com/digital-signatures/rsa-sign-verify-examples
-# from more_itertools import split_when
 from Crypto.PublicKey import RSA
 from hashlib import sha256
 from Models import Mnist_2NN, Mnist_CNN
 from Blockchain import Blockchain
 
 class Device:
-	def __init__(self, idx, assigned_train_ds, assigned_test_dl, local_batch_size, learning_rate, loss_func, opti, network_stability, net, dev, miner_acception_wait_time, miner_accepted_transactions_size_limit, validator_threshold, pow_difficulty, even_link_speed_strength, base_data_transmission_speed, even_computation_power, is_malicious, noise_variance, malicious_updates_discount, knock_out_rounds, lazy_worker_knock_out_rounds):
+	def __init__(self, idx, assigned_train_ds, assigned_test_dl, local_batch_size, learning_rate, loss_func, opti, network_stability, net, dev, miner_acception_wait_time, miner_accepted_transactions_size_limit, validator_threshold, pow_difficulty, even_link_speed_strength, base_data_transmission_speed, even_computation_power, is_malicious, noise_variance, check_signature, not_resync_chain, malicious_updates_discount, knock_out_rounds, lazy_worker_knock_out_rounds):
 		self.idx = idx
+		# deep learning variables
 		self.train_ds = assigned_train_ds
 		self.test_dl = assigned_test_dl
 		self.local_batch_size = local_batch_size
@@ -33,7 +33,7 @@ class Device:
 		self.local_train_parameters = None
 		self.initial_net_parameters = None
 		self.global_parameters = None
-		# used to assign role to the device
+		# blockchain variables
 		self.role = None
 		self.pow_difficulty = pow_difficulty
 		if even_link_speed_strength:
@@ -54,7 +54,7 @@ class Device:
 			self.computation_power = random.randint(0, 4)
 		self.peer_list = set()
 		# used in cross_verification and in the PoS
-		self.on_line = True
+		self.online = True
 		self.rewards = 0
 		self.blockchain = Blockchain()
 		# init key pair
@@ -71,12 +71,13 @@ class Device:
 		self.the_added_block = None
 		self.is_malicious = is_malicious
 		self.noise_variance = noise_variance
+		self.check_signature = check_signature
+		self.not_resync_chain = not_resync_chain
 		self.malicious_updates_discount = malicious_updates_discount
 		# used to identify slow or lazy workers
 		self.active_worker_record_by_round = {}
 		self.untrustworthy_workers_record_by_comm_round = {}
 		self.untrustworthy_validators_record_by_comm_round = {}
-		# self.untrustworthy_miners = {} just drop the block, as later when resync, tho untrustworthy by this paticular, have to agree to most
 		# for picking PoS legitimate blockd;bs
 		# self.stake_tracker = {} # used some tricks in main.py for ease of programming
 		# used to determine the slowest device round end time to compare PoW with PoS round end time. If simulate under computation_power = 0, this may end up equaling infinity
@@ -89,6 +90,18 @@ class Device:
 		self.worker_associated_miner = None
 		self.local_update_time = None
 		self.local_total_epoch = 0
+		''' For validators '''
+		self.validator_associated_worker_set = set()
+		self.validation_rewards_this_round = 0
+		self.accuracies_this_round = {}
+		self.validator_associated_miner = None
+		# when validator directly accepts workers' updates
+		self.unordered_arrival_time_accepted_worker_transactions = {}
+		self.validator_accepted_broadcasted_worker_transactions = None or []
+		self.final_transactions_queue_to_validate = {}
+		self.post_validation_transactions_queue = None or []
+		self.validator_threshold = validator_threshold
+		self.validator_local_accuracy = None
 		''' For miners '''
 		self.miner_associated_worker_set = set()
 		self.miner_associated_validator_set = set()
@@ -106,63 +119,27 @@ class Device:
 		self.final_candidate_transactions_queue_to_mine = {}
 		self.block_generation_time_point = None
 		self.unordered_propagated_block_processing_queue = {} # pure simulation queue and does not exist in real distributed system
-		''' For validators '''
-		self.validator_associated_worker_set = set()
-		self.validation_rewards_this_round = 0
-		self.accuracies_this_round = {}
-		self.validator_associated_miner = None
-		# when validator directly accepts workers' updates
-		self.unordered_arrival_time_accepted_worker_transactions = {}
-		self.validator_accepted_broadcasted_worker_transactions = None or []
-		self.final_transactions_queue_to_validate = {}
-		self.post_validation_transactions_queue = None or []
-		self.validator_threshold = validator_threshold
-		self.validator_local_accuracy = None
 		''' For malicious node '''
 		self.variance_of_noises = None or []
 		
 
 	''' Common Methods '''
+
+	''' setters '''
+
 	def set_devices_dict_and_aio(self, devices_dict, aio):
 		self.devices_dict = devices_dict
 		self.aio = aio
-
-	def return_idx(self):
-		return self.idx
-
+	
 	def generate_rsa_key(self):
 		keyPair = RSA.generate(bits=1024)
 		self.modulus = keyPair.n
 		self.private_key = keyPair.d
 		self.public_key = keyPair.e
 	
-	def return_rsa_pub_key(self):
-		return {"modulus": self.modulus, "pub_key": self.public_key}
-	
-	def sign_msg(self, msg):
-		hash = int.from_bytes(sha256(str(msg).encode('utf-8')).digest(), byteorder='big')
-		# pow() is python built-in modular exponentiation function
-		signature = pow(hash, self.private_key, self.modulus)
-		return signature
-
 	def init_global_parameters(self):
 		self.initial_net_parameters = self.net.state_dict()
 		self.global_parameters = self.net.state_dict()
-
-	def add_peers(self, new_peers):
-		if isinstance(new_peers, Device):
-			self.peer_list.add(new_peers)
-		else:
-			self.peer_list.update(new_peers)
-
-	def return_peers(self):
-		return self.peer_list
-	
-	def remove_peers(self, peers_to_remove):
-		if isinstance(peers_to_remove, Device):
-			self.peer_list.discard(peers_to_remove)
-		else:
-			self.peer_list.difference_update(peers_to_remove)
 
 	def assign_role(self):
 		# equal probability
@@ -182,16 +159,71 @@ class Device:
 		self.role = "worker"
 
 	def assign_validator_role(self):
-		self.role = "validator"   
-		
+		self.role = "validator" 
+
+	''' getters '''
+
+	def return_idx(self):
+		return self.idx
+	
+	def return_rsa_pub_key(self):
+		return {"modulus": self.modulus, "pub_key": self.public_key}
+
+	def return_peers(self):
+		return self.peer_list
+
 	def return_role(self):
 		return self.role
 
+	def is_online(self):
+		return self.online
+
+	def return_is_malicious(self):
+		return self.is_malicious
+
+	def return_black_list(self):
+		return self.black_list
+
+	def return_blockchain_object(self):
+		return self.blockchain
+
+	def return_stake(self):
+		return self.rewards
+
+	def return_computation_power(self):
+		return self.computation_power
+
+	def return_the_added_block(self):
+		return self.the_added_block
+
+	def return_round_end_time(self):
+		return self.round_end_time
+
+	''' functions '''
+	
+	def sign_msg(self, msg):
+		hash = int.from_bytes(sha256(str(msg).encode('utf-8')).digest(), byteorder='big')
+		# pow() is python built-in modular exponentiation function
+		signature = pow(hash, self.private_key, self.modulus)
+		return signature
+
+	def add_peers(self, new_peers):
+		if isinstance(new_peers, Device):
+			self.peer_list.add(new_peers)
+		else:
+			self.peer_list.update(new_peers)
+
+	def remove_peers(self, peers_to_remove):
+		if isinstance(peers_to_remove, Device):
+			self.peer_list.discard(peers_to_remove)
+		else:
+			self.peer_list.difference_update(peers_to_remove)
+
 	def online_switcher(self):
-		old_status = self.on_line
+		old_status = self.online
 		online_indicator = random.random()
 		if online_indicator < self.network_stability:
-			self.on_line = True
+			self.online = True
 			# if back online, update peer and resync chain
 			if old_status == False:
 				print(f"{self.idx} goes back online.")
@@ -201,19 +233,10 @@ class Device:
 				if self.pow_resync_chain():
 					self.update_model_after_chain_resync()
 		else:
-			self.on_line = False
+			self.online = False
 			print(f"{self.idx} goes offline.")
-		return self.on_line
+		return self.online
 
-	def is_online(self):
-		return self.on_line
-
-	def return_is_malicious(self):
-		return self.is_malicious
-
-	def return_black_list(self):
-		return self.black_list
-	
 	def update_peer_list(self):
 		print(f"\n{self.idx} - {self.role} is updating peer list...")
 		old_peer_list = copy.copy(self.peer_list)
@@ -255,9 +278,6 @@ class Device:
 		# WILL ALWAYS RETURN TRUE AS OFFLINE PEERS WON'T BE REMOVED ANY MORE, UNLESS ALL PEERS ARE MALICIOUS...but then it should not register with any other peer. Original purpose - if peer_list ends up empty, randomly register with another device
 		return False if not self.peer_list else True
 
-	def return_blockchain_object(self):
-		return self.blockchain
-
 	def check_pow_proof(self, block_to_check):
 		# remove its block hash(compute_hash() by default) to verify pow_proof as block hash was set after pow
 		pow_proof = block_to_check.return_pow_proof()
@@ -286,7 +306,8 @@ class Device:
 		return accumulated_stake
 
 	def resync_chain(self, mining_consensus):
-		return # temporary workaround to save GPU memory
+		if self.not_resync_chain:
+			return # temporary workaround to save GPU memory
 		if mining_consensus == 'PoW':
 			self.pow_resync_chain()
 		else:
@@ -352,32 +373,29 @@ class Device:
 	def receive_rewards(self, rewards):
 		self.rewards += rewards
 	
-	def return_stake(self):
-		return self.rewards
-
-	def return_computation_power(self):
-		return self.computation_power
-
 	def verify_miner_transaction_by_signature(self, transaction_to_verify, miner_device_idx):
 		if miner_device_idx in self.black_list:
 			print(f"{miner_device_idx} is in miner's blacklist. Trasaction won't get verified.")
 			return False
-		# transaction_before_signed = copy.deepcopy(transaction_to_verify)
-		# del transaction_before_signed["miner_signature"]
-		# modulus = transaction_to_verify['miner_rsa_pub_key']["modulus"]
-		# pub_key = transaction_to_verify['miner_rsa_pub_key']["pub_key"]
-		# signature = transaction_to_verify["miner_signature"]
-		# # verify
-		# hash = int.from_bytes(sha256(str(sorted(transaction_before_signed.items())).encode('utf-8')).digest(), byteorder='big')
-		# hashFromSignature = pow(signature, pub_key, modulus)
-		#if hash == hashFromSignature:
-		if True:
+		if self.check_signature:
+			transaction_before_signed = copy.deepcopy(transaction_to_verify)
+			del transaction_before_signed["miner_signature"]
+			modulus = transaction_to_verify['miner_rsa_pub_key']["modulus"]
+			pub_key = transaction_to_verify['miner_rsa_pub_key']["pub_key"]
+			signature = transaction_to_verify["miner_signature"]
+			# verify
+			hash = int.from_bytes(sha256(str(sorted(transaction_before_signed.items())).encode('utf-8')).digest(), byteorder='big')
+			hashFromSignature = pow(signature, pub_key, modulus)
+			if hash == hashFromSignature:
+				print(f"A transaction recorded by miner {miner_device_idx} in the block is verified!")
+				return True
+			else:
+				print(f"Signature invalid. Transaction recorded by {miner_device_idx} is NOT verified.")
+				return False
+		else:
 			print(f"A transaction recorded by miner {miner_device_idx} in the block is verified!")
 			return True
-		# else:
-		#	 print(f"Signature invalid. Transaction recorded by {miner_device_idx} is NOT verified.")
-		#	 return False
-	
+		
 	def verify_block(self, block_to_verify, sending_miner):
 		if not self.online_switcher():
 			print(f"{self.idx} goes offline when verifying a block")
@@ -395,26 +413,27 @@ class Device:
 			print(f"PoW proof of the block from miner {self.idx} is not verified.")
 			return False, False
 		# # check if miner's signature is valid
-		# signature_dict = block_to_verify.return_miner_rsa_pub_key()
-		# modulus = signature_dict["modulus"]
-		# pub_key = signature_dict["pub_key"]
-		# signature = block_to_verify.return_signature()
-		# # verify signature
-		# block_to_verify_before_sign = copy.deepcopy(block_to_verify)
-		# block_to_verify_before_sign.remove_signature_for_verification()
-		# hash = int.from_bytes(sha256(str(block_to_verify_before_sign.__dict__).encode('utf-8')).digest(), byteorder='big')
-		# hashFromSignature = pow(signature, pub_key, modulus)
-		# if hash != hashFromSignature:
-		#	 print(f"Signature of the block sent by miner {sending_miner} mined by miner {mined_by} is not verified by {self.role} {self.idx}.")
-		#	 return False, False
-		# # check previous hash based on own chain
-		# last_block = self.return_blockchain_object().return_last_block()
-		# if last_block is not None:
-		#	 # check if the previous_hash referred in the block and the hash of latest block in the chain match.
-		#	 last_block_hash = last_block.compute_hash(hash_entire_block=True)
-		#	 if block_to_verify.return_previous_block_hash() != last_block_hash:
-		#		 print(f"Block sent by miner {sending_miner} mined by miner {mined_by} has the previous hash recorded as {block_to_verify.return_previous_block_hash()}, but the last block's hash in chain is {last_block_hash}. This is possibly due to a forking event from last round. Block not verified and won't be added. Device needs to resync chain next round.")
-		#		 return False, False
+		if self.check_signature:
+			signature_dict = block_to_verify.return_miner_rsa_pub_key()
+			modulus = signature_dict["modulus"]
+			pub_key = signature_dict["pub_key"]
+			signature = block_to_verify.return_signature()
+			# verify signature
+			block_to_verify_before_sign = copy.deepcopy(block_to_verify)
+			block_to_verify_before_sign.remove_signature_for_verification()
+			hash = int.from_bytes(sha256(str(block_to_verify_before_sign.__dict__).encode('utf-8')).digest(), byteorder='big')
+			hashFromSignature = pow(signature, pub_key, modulus)
+			if hash != hashFromSignature:
+				print(f"Signature of the block sent by miner {sending_miner} mined by miner {mined_by} is not verified by {self.role} {self.idx}.")
+				return False, False
+			# check previous hash based on own chain
+			last_block = self.return_blockchain_object().return_last_block()
+			if last_block is not None:
+				# check if the previous_hash referred in the block and the hash of latest block in the chain match.
+				last_block_hash = last_block.compute_hash(hash_entire_block=True)
+				if block_to_verify.return_previous_block_hash() != last_block_hash:
+					print(f"Block sent by miner {sending_miner} mined by miner {mined_by} has the previous hash recorded as {block_to_verify.return_previous_block_hash()}, but the last block's hash in chain is {last_block_hash}. This is possibly due to a forking event from last round. Block not verified and won't be added. Device needs to resync chain next round.")
+					return False, False
 		# All verifications done.
 		print(f"Block accepted from miner {sending_miner} mined by {mined_by} has been verified by {self.idx}!")
 		verification_time = (time.time() - verification_time)/self.computation_power
@@ -427,9 +446,6 @@ class Device:
 		# self.has_added_block = True
 		self.the_added_block = block_to_add
 		return True
-
-	def return_the_added_block(self):
-		return self.the_added_block
 
 	# also accumulate rewards here
 	def process_block(self, block_to_process, log_files_folder_path, conn, conn_cursor, when_resync=False):
@@ -600,8 +616,6 @@ class Device:
 	def add_to_round_end_time(self, time_to_add):
 		self.round_end_time += time_to_add
 	
-	def return_round_end_time(self):
-		return self.round_end_time
 
 	def other_tasks_at_the_end_of_comm_round(self, this_comm_round, log_files_folder_path):
 		self.kick_out_slow_or_lazy_workers(this_comm_round, log_files_folder_path)
@@ -899,24 +913,27 @@ class Device:
 			if transaction_validator_idx in self.black_list:
 				print(f"{transaction_validator_idx} is in miner's blacklist. Trasaction won't get verified.")
 				return False, None
-			# transaction_before_signed = copy.deepcopy(transaction_to_verify)
-			# del transaction_before_signed["validator_signature"]
-			# modulus = transaction_to_verify['validator_rsa_pub_key']["modulus"]
-			# pub_key = transaction_to_verify['validator_rsa_pub_key']["pub_key"]
-			# signature = transaction_to_verify["validator_signature"]
-			# # begin verification
 			verification_time = time.time()
-			# # verify
-			# hash = int.from_bytes(sha256(str(sorted(transaction_before_signed.items())).encode('utf-8')).digest(), byteorder='big')
-			# hashFromSignature = pow(signature, pub_key, modulus)
-			#if hash == hashFromSignature:
-			if True:
+			if self.check_signature:
+				transaction_before_signed = copy.deepcopy(transaction_to_verify)
+				del transaction_before_signed["validator_signature"]
+				modulus = transaction_to_verify['validator_rsa_pub_key']["modulus"]
+				pub_key = transaction_to_verify['validator_rsa_pub_key']["pub_key"]
+				signature = transaction_to_verify["validator_signature"]
+				# begin verification
+				hash = int.from_bytes(sha256(str(sorted(transaction_before_signed.items())).encode('utf-8')).digest(), byteorder='big')
+				hashFromSignature = pow(signature, pub_key, modulus)
+				if hash == hashFromSignature:
+					print(f"Signature of transaction from validator {transaction_validator_idx} is verified by {self.role} {self.idx}!")
+					verification_time = (time.time() - verification_time)/self.computation_power
+					return verification_time, True
+				else:
+					 print(f"Signature invalid. Transaction from validator {transaction_validator_idx} is NOT verified.")
+					 return (time.time() - verification_time)/self.computation_power, False
+			else:
 				print(f"Signature of transaction from validator {transaction_validator_idx} is verified by {self.role} {self.idx}!")
 				verification_time = (time.time() - verification_time)/self.computation_power
 				return verification_time, True
-			# else:
-			#	 print(f"Signature invalid. Transaction from validator {transaction_validator_idx} is NOT verified.")
-			#	 return (time.time() - verification_time)/self.computation_power, False
 
 	def sign_candidate_transaction(self, candidate_transaction):
 		signing_time = time.time()
@@ -980,12 +997,6 @@ class Device:
 	def toss_ropagated_validator_block(self):
 		self.received_propagated_validator_block = None
 
-	# def set_block_to_add(self, block_to_add):
-	#	 self.block_to_add = block_to_add
-
-	# def return_block_to_add(self):
-	#	 return self.block_to_add
-	
 	def miner_reset_vars_for_new_round(self):
 		self.miner_associated_worker_set.clear()
 		self.miner_associated_validator_set.clear()
@@ -1010,9 +1021,6 @@ class Device:
 	
 	def return_unordered_arrival_time_accepted_validator_transactions(self):
 		return self.unordered_arrival_time_accepted_validator_transactions
-	# def miner_reset_vars_for_new_validation_round(self):
-	#	 self.unconfirmmed_transactions.clear()
-	#	 self.broadcasted_transactions.clear()
 
 	def miner_broadcast_validator_transactions(self):
 		for peer in self.peer_list:
@@ -1080,17 +1088,6 @@ class Device:
 
 
 	def return_validations_and_signature(self, comm_round):
-		#kick_out_device_set = set()
-		#validation_effort_rewards = 0
-		# from more_itertools import split_when
-		# for worker_idx, worker_accuracy in self.worker_accuracy_accross_records.items():
-		#	 decreasing_accuracies = list(split_when(worker_accuracy, lambda x, y: y > x))
-		#	 for decreasing_accuracie in decreasing_accuracies:
-		#		 if decreasing_accuracie >= self.knock_out_rounds:
-		#			 kick_out_device_list.add(worker_idx)
-		#			 break
-		#	 self.receive_rewards(rewards)
-		#	 validation_effort_rewards += rewards
 		validation_transaction_dict = {'validator_device_idx': self.idx, 'round_number': comm_round, 'accuracies_this_round': copy.deepcopy(self.accuracies_this_round), 'validation_effort_rewards': self.validation_rewards_this_round, "rsa_pub_key": self.return_rsa_pub_key()}
 		validation_transaction_dict["signature"] = self.sign_msg(sorted(validation_transaction_dict.items()))
 		return validation_transaction_dict
@@ -1112,8 +1109,6 @@ class Device:
 		self.validator_associated_miner = random.sample(miners_in_peer_list, 1)[0]
 		return self.validator_associated_miner
 
-	# def return_validator_acception_wait_time(self):
-	#	 return self.validator_acception_wait_time
 
 	''' miner and validator '''
 	def add_device_to_association(self, to_add_device):
@@ -1180,18 +1175,6 @@ class Device:
 		return to_associate_device
 
 	''' validator '''
-	# def add_post_validation_transaction(self, transaction_to_validate, souce_device_idx):
-	#	 if not souce_device_idx in self.black_list:
-	#		 self.post_validation_transactions.append(copy.deepcopy(transaction_to_validate))
-	#		 print(f"worker {souce_device_idx}'s transaction has been recorded by {self.role} {self.idx}")
-	#	 else:
-	#		 print(f"Source worker {souce_device_idx} is in the black list of {self.role} {self.idx}. Transaction will not be accepted.")
-
-	# def remove_post_validation_transaction(self, transaction_to_remove):
-	#	 self.post_validation_transactions.remove(transaction_to_remove)
-
-	# def return_post_validation_transactions(self):
-	#	 return self.post_validation_transactions
 
 	def set_unordered_arrival_time_accepted_worker_transactions(self, unordered_transaction_arrival_queue):
 		self.unordered_arrival_time_accepted_worker_transactions = unordered_transaction_arrival_queue
@@ -1279,24 +1262,27 @@ class Device:
 			if worker_transaction_device_idx in self.black_list:
 				print(f"{worker_transaction_device_idx} is in validator's blacklist. Trasaction won't get validated.")
 				return False, False
-			# transaction_before_signed = copy.deepcopy(transaction_to_validate)
-			# del transaction_before_signed["worker_signature"]
-			# modulus = transaction_to_validate['worker_rsa_pub_key']["modulus"]
-			# pub_key = transaction_to_validate['worker_rsa_pub_key']["pub_key"]
-			# signature = transaction_to_validate["worker_signature"]
-			# begin validation
 			validation_time = time.time()
-			# 1 - verify signature
-			# hash = int.from_bytes(sha256(str(sorted(transaction_before_signed.items())).encode('utf-8')).digest(), byteorder='big')
-			# hashFromSignature = pow(signature, pub_key, modulus)
-			#if hash == hashFromSignature:
-			if True:
+			if self.check_signature:
+				transaction_before_signed = copy.deepcopy(transaction_to_validate)
+				del transaction_before_signed["worker_signature"]
+				modulus = transaction_to_validate['worker_rsa_pub_key']["modulus"]
+				pub_key = transaction_to_validate['worker_rsa_pub_key']["pub_key"]
+				signature = transaction_to_validate["worker_signature"]
+				# begin validation
+				# 1 - verify signature
+				hash = int.from_bytes(sha256(str(sorted(transaction_before_signed.items())).encode('utf-8')).digest(), byteorder='big')
+				hashFromSignature = pow(signature, pub_key, modulus)
+				if hash == hashFromSignature:
+					print(f"Signature of transaction from worker {worker_transaction_device_idx} is verified by validator {self.idx}!")
+					transaction_to_validate['worker_signature_valid'] = True
+				else:
+					 print(f"Signature invalid. Transaction from worker {worker_transaction_device_idx} does NOT pass verification.")
+					 # will also add sig not verified transaction due to the validator's verification effort and its rewards needs to be recorded in the block
+					 transaction_to_validate['worker_signature_valid'] = False
+			else:
 				print(f"Signature of transaction from worker {worker_transaction_device_idx} is verified by validator {self.idx}!")
 				transaction_to_validate['worker_signature_valid'] = True
-			# else:
-			#	 print(f"Signature invalid. Transaction from worker {worker_transaction_device_idx} does NOT pass verification.")
-			#	 # will also add sig not verified transaction due to the validator's verification effort and its rewards needs to be recorded in the block
-			#	 transaction_to_validate['worker_signature_valid'] = False
 			# 2 - validate worker's local_updates_params if worker's signature is valid
 			if transaction_to_validate['worker_signature_valid']:
 				# accuracy validated by worker's update
@@ -1351,7 +1337,7 @@ class Device:
 			return validation_time, transaction_to_validate
 
 class DevicesInNetwork(object):
-	def __init__(self, data_set_name, is_iid, batch_size, learning_rate, loss_func, opti, num_devices, network_stability, net, dev, knock_out_rounds, lazy_worker_knock_out_rounds, shard_test_data, miner_acception_wait_time, miner_accepted_transactions_size_limit, validator_threshold, pow_difficulty, even_link_speed_strength, base_data_transmission_speed, even_computation_power, malicious_updates_discount, num_malicious, noise_variance):
+	def __init__(self, data_set_name, is_iid, batch_size, learning_rate, loss_func, opti, num_devices, network_stability, net, dev, knock_out_rounds, lazy_worker_knock_out_rounds, shard_test_data, miner_acception_wait_time, miner_accepted_transactions_size_limit, validator_threshold, pow_difficulty, even_link_speed_strength, base_data_transmission_speed, even_computation_power, malicious_updates_discount, num_malicious, noise_variance, check_signature, not_resync_chain):
 		self.data_set_name = data_set_name
 		self.is_iid = is_iid
 		self.batch_size = batch_size
@@ -1373,6 +1359,8 @@ class DevicesInNetwork(object):
 		self.num_malicious = num_malicious
 		self.malicious_updates_discount = malicious_updates_discount
 		self.noise_variance = noise_variance
+		self.check_signature = check_signature
+		self.not_resync_chain = not_resync_chain
 		# distribute dataset
 		''' validator '''
 		self.validator_threshold = validator_threshold
@@ -1441,7 +1429,7 @@ class DevicesInNetwork(object):
 				# add Gussian Noise
 
 			device_idx = f'device_{i+1}'
-			a_device = Device(device_idx, TensorDataset(torch.tensor(local_train_data), torch.tensor(local_train_label)), test_data_loader, self.batch_size, self.learning_rate, self.loss_func, self.opti, self.default_network_stability, self.net, self.dev, self.miner_acception_wait_time, self.miner_accepted_transactions_size_limit, self.validator_threshold, self.pow_difficulty, self.even_link_speed_strength, self.base_data_transmission_speed, self.even_computation_power, is_malicious, self.noise_variance, self.malicious_updates_discount, self.knock_out_rounds, self.lazy_worker_knock_out_rounds)
+			a_device = Device(device_idx, TensorDataset(torch.tensor(local_train_data), torch.tensor(local_train_label)), test_data_loader, self.batch_size, self.learning_rate, self.loss_func, self.opti, self.default_network_stability, self.net, self.dev, self.miner_acception_wait_time, self.miner_accepted_transactions_size_limit, self.validator_threshold, self.pow_difficulty, self.even_link_speed_strength, self.base_data_transmission_speed, self.even_computation_power, is_malicious, self.noise_variance, self.check_signature, self.not_resync_chain, self.malicious_updates_discount, self.knock_out_rounds, self.lazy_worker_knock_out_rounds)
 			# device index starts from 1
 			self.devices_set[device_idx] = a_device
 			print(f"Sharding dataset to {device_idx} done.")

@@ -46,6 +46,7 @@ for log_folder in vars_names:
 
 
 log_vars = ["POW_D2", "POW_D1", "POS_r1", "POS_r2", "POS_r3"]
+log_vars_label = ["PoW_d2", "PoW_d1", "PoS_e1", "PoS_e2", "PoS_e3"]
 # axs_iters_y = [0,1,2,3,4]
 fig, axs = plt.subplots(1, 5, sharey=True)
 plt.setp(axs, ylim=(0, 1000))
@@ -55,7 +56,7 @@ for log_var_iter in range(len(vars_names)):
 	log_var = vars_names[log_var_iter]
 	# set label
 	axs[log_var_iter].set_xlabel('Comm Round')
-	axs[log_var_iter].set_title(f'Stake Accum {log_vars[log_var_iter]}')
+	axs[log_var_iter].set_title(f'Stake Accum {log_vars_label[log_var_iter]}')
 	axs[log_var_iter].yaxis.set_major_formatter(mticker.FormatStrFormatter('%.1fk'))
 	# axs[0, axs_iters_y[log_var_iter]].yaxis.set_major_formatter(mticker.FormatStrFormatter('%.1fk'))
 	for device_idx, stakes in vars()[f'{log_var}_stakes'].items():
