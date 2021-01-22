@@ -877,7 +877,8 @@ if __name__=="__main__":
 		if args['destroy_tx_in_block']:
 			for device in devices_list:
 				last_block = device.return_blockchain_object().return_last_block()
-				last_block.free_tx()
+				if last_block:
+					last_block.free_tx()
 
 		# save network_snapshot if reaches save frequency
 		if args['save_network_snapshots'] and (comm_round == 1 or comm_round % args['save_freq'] == 0):
