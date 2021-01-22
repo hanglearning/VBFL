@@ -99,6 +99,13 @@
 			"program": "${workspaceFolder}/plottings/crop_white_on_plots.py",
 			"console": "integratedTerminal",
 			"args": ["${workspaceFolder}/plotting_logs/f5_effectivesness_validation_mechanisms.png"]
+		},
+		{
+			"name": "main2",
+			"type": "python",
+			"request": "launch",
+			"program": "${workspaceFolder}/main.py",
+			"console": "integratedTerminal"
 		}
 		
 	]
