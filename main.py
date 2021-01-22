@@ -1,12 +1,11 @@
 # fedavg from https://github.com/WHDY/FedAvg/
-# TODO DELETE ALL receive_rewards() and only do it after a block is appended! AND whenever resync chain recalculate rewards!!!
 # TODO redistribute offline() based on very transaction, not at the beginning of every loop
 # TODO when accepting transactions, check comm_round must be in the same, that is to assume by default they only accept the transactions that are in the same round, so the final block contains only updates from the same round
 # TODO subnets - potentially resolved by let each miner sends block 
 # TODO let's not remove peers because of offline as peers may go back online later, instead just check if they are online or offline. Only remove peers if they are malicious. In real distributed network, remove peers if cannot reach for a long period of time
 # assume no resending transaction mechanism if a transaction is lost due to offline or time out. most of the time, unnecessary because workers always send the newer updates, if it's not the last worker's updates
 # assume just skip verifying a transaction if offline, in reality it may continue to verify what's left
-# PoS also uses resync chain - the longest chain
+# PoS also uses resync chain - the chain with highter stake
 # only focus on catch malicious worker
 # TODO need to make changes in these functions on Sunday
 #pow_resync_chain
