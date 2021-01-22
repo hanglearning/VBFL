@@ -60,10 +60,10 @@ parser.add_argument('-sm', '--save_most_recent', type=int, default=2, help='in c
 
 # FL attributes
 parser.add_argument('-B', '--batchsize', type=int, default=10, help='local train batch size')
-parser.add_argument('-mn', '--model_name', type=str, default='mnist_2nn', help='the model to train')
+parser.add_argument('-mn', '--model_name', type=str, default='mnist_cnn', help='the model to train')
 parser.add_argument('-lr', "--learning_rate", type=float, default=0.01, help="learning rate, use value from origin paper as default")
 parser.add_argument('-op', '--optimizer', type=str, default="SGD", help='optimizer to be used, by default implementing stochastic gradient descent')
-parser.add_argument('-iid', '--IID', type=int, default=0, help='the way to allocate data to clients')
+parser.add_argument('-iid', '--IID', type=int, default=0, help='the way to allocate data to devices')
 parser.add_argument('-max_ncomm', '--max_num_comm', type=int, default=100, help='maximum number of communication rounds, may terminate early if converges')
 parser.add_argument('-nd', '--num_devices', type=int, default=20, help='numer of the devices in the simulation network')
 parser.add_argument('-st', '--shard_test_data', type=int, default=0, help='it is easy to see the global models are consistent across devices when the test dataset is NOT sharded')
@@ -73,15 +73,15 @@ parser.add_argument('-le', '--default_local_epochs', type=int, default=5, help='
 
 # blockchain system consensus attributes
 parser.add_argument('-ur', '--unit_reward', type=int, default=1, help='unit reward for providing data, verification of signature, validation and so forth')
-parser.add_argument('-ko', '--knock_out_rounds', type=int, default=3, help="a worker or validator device is kicked out of the device's peer list(put in black list) if it's identified as malicious for this number of rounds")
-parser.add_argument('-lo', '--lazy_worker_knock_out_rounds', type=int, default=6, help="a worker device is kicked out of the device's peer list(put in black list) if it does not provide updates for this number of rounds, due to too slow or just lazy to do updates and only accept the model udpates.(do not care lazy validator or miner as they will just not receive rewards)")
+parser.add_argument('-ko', '--knock_out_rounds', type=int, default=6, help="a worker or validator device is kicked out of the device's peer list(put in black list) if it's identified as malicious for this number of rounds")
+parser.add_argument('-lo', '--lazy_worker_knock_out_rounds', type=int, default=10, help="a worker device is kicked out of the device's peer list(put in black list) if it does not provide updates for this number of rounds, due to too slow or just lazy to do updates and only accept the model udpates.(do not care lazy validator or miner as they will just not receive rewards)")
 parser.add_argument('-pow', '--pow_difficulty', type=int, default=0, help="if set to 0, meaning miners are using PoS")
 
 # blockchain FL validator/miner restriction tuning parameters
 parser.add_argument('-mt', '--miner_acception_wait_time', type=float, default=0.0, help="default time window for miners to accept transactions, in seconds. 0 means no time limit, and each device will just perform same amount(-le) of epochs per round like in FedAvg paper")
 parser.add_argument('-ml', '--miner_accepted_transactions_size_limit', type=float, default=0.0, help="no further transactions will be accepted by miner after this limit. 0 means no size limit. either this or -mt has to be specified, or both. This param determines the final block_size")
 parser.add_argument('-mp', '--miner_pos_propagated_block_wait_time', type=float, default=float("inf"), help="this wait time is counted from the beginning of the comm round, used to simulate forking events in PoS")
-parser.add_argument('-vh', '--validator_threshold', type=float, default=0.01, help="a threshold value of accuracy difference to determine malicious worker")
+parser.add_argument('-vh', '--validator_threshold', type=float, default=1.0, help="a threshold value of accuracy difference to determine malicious worker")
 parser.add_argument('-md', '--malicious_updates_discount', type=float, default=0.0, help="do not entirely drop the voted negative worker transaction because that risks the same worker dropping the entire transactions and repeat its accuracy again and again and will be kicked out. Apply a discount factor instead to the false negative worker's updates are by some rate applied so it won't repeat")
 parser.add_argument('-mv', '--malicious_validator_on', type=int, default=0, help="let malicious validator flip voting result")
 
@@ -93,8 +93,8 @@ parser.add_argument('-dts', '--base_data_transmission_speed', type=float, defaul
 parser.add_argument('-ecp', '--even_computation_power', type=int, default=1, help="This variable is used to simulate strength of hardware equipment. The calculation time will be shrunk down by this value. Default value 1 means evenly assign computation power to 1. If set to 0, power is randomly initiated as an int between 0 and 4, both included.")
 
 # simulation attributes
-parser.add_argument('-ha', '--hard_assign', type=str, default='*,*,*', help='hard assign number of roles in the network, order by worker, validator and miner')
-parser.add_argument('-aio', '--all_in_one', type=int, default=0, help='let all nodes be aware of each other in the network while registering')
+parser.add_argument('-ha', '--hard_assign', type=str, default='12,5,3', help="hard assign number of roles in the network, order by worker, validator and miner. \"*,*,*\" means completely random role-assigning in each communication round ")
+parser.add_argument('-aio', '--all_in_one', type=int, default=1, help='let all nodes be aware of each other in the network while registering')
 parser.add_argument('-cs', '--check_signature', type=int, default=0, help='if set to 0, all signatures are assumed to be verified to save execution time')
 
 # parser.add_argument('-la', '--least_assign', type=str, default='*,*,*', help='the assigned number of roles are at least guaranteed in the network')
