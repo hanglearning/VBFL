@@ -103,7 +103,7 @@ if __name__=="__main__":
 
 	# create logs/ if not exists
 	if not os.path.exists('logs'):
-    	os.makedirs('logs')
+		os.makedirs('logs')
 
 	# get arguments
 	args = parser.parse_args()
