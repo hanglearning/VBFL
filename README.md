@@ -6,7 +6,7 @@ VBFL is a Proof-of-Stake (PoS) blockchain-based Federated Learning framework wit
 Please refer to [*Robust Blockchained Federated Learning with Model Validation and Proof-of-Stake Inspired Consensus*](https://arxiv.org/abs/2101.03300) for detailed explanations of the mechanisms.
 
 ## Instructions to Run
-####<ins>Suggested</ins> Environments Setup
+#### <ins>Suggested</ins> Environments Setup
 ```
 python 3.7.6
 pytorch 1.4.0
@@ -33,7 +33,7 @@ $ conda install pytorch=1.4.0 torchvision torchaudio cudatoolkit=10.1 -c pytorch
 $ conda install pycryptodome=3.9.9
 $ conda install matplotlib
 ```
-####Run VBFL Simulation
+#### Run VBFL Simulation
 
 Sample running command 
 ```
@@ -78,11 +78,11 @@ Other arguments
 Please see <i>main.py</i> for other argument options.
 
 ## Emulation Logs
-####Examing the Logs
+#### Examing the Logs
 
 While running, the program saves the emulation logs inside of the <i>log/\<execution_time\></i> folder. The logs are saved based on communication rounds. In the corresponded round folder, you may find the model accuracy evaluated by each device using the global model at the end of each communication round. You may also find each worker's local training accuracy, the validation-accuracy-difference value of each validator, and the final stake rewarded to each device in this communication round. Outside of the round folders, you may also find the malicious devices identification log.
 
-####Plotting Experimental Results
+#### Plotting Experimental Results
 
 The code for plotting the experimental results are provided in the <i>plottings</i> folder. The path of the desired log folder has to be specified for the plotting code to run. Please look at the code to determine the argument type or look at the samples in <i>.vscode/launch.json</i>.
 
