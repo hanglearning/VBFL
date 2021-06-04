@@ -1,7 +1,7 @@
-# VBFL (emulation)
+# VBFL (simulation)
 
 ## Introduction
-VBFL is a Proof-of-Stake (PoS) blockchain-based Federated Learning framework with a validation scheme robust against the distorted local model updates. This repo hosts an emulated implementation for VBFL written in Python.
+VBFL is a Proof-of-Stake (PoS) blockchain-based Federated Learning framework with a validation scheme robust against the distorted local model updates. This repo hosts an simulated implementation for VBFL written in Python.
 
 Please refer to [*Robust Blockchained Federated Learning with Model Validation and Proof-of-Stake Inspired Consensus*](https://arxiv.org/abs/2101.03300) for detailed explanations of the mechanisms.
 
@@ -78,7 +78,7 @@ Other arguments
 Please see <i>main.py</i> for other argument options.
 
 ## Emulation Logs
-#### Examing the Logs
+#### Examining the Logs
 
 While running, the program saves the emulation logs inside of the <i>log/\<execution_time\></i> folder. The logs are saved based on communication rounds. In the corresponded round folder, you may find the model accuracy evaluated by each device using the global model at the end of each communication round. You may also find each worker's local training accuracy, the validation-accuracy-difference value of each validator, and the final stake rewarded to each device in this communication round. Outside of the round folders, you may also find the malicious devices identification log.
 
