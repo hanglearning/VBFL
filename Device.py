@@ -263,7 +263,7 @@ class Device:
 			added_peers = self.peer_list.difference(old_peer_list)
 			if potential_malicious_peer_set:
 				print("These malicious peers are removed")
-				for peer in removed_peers:
+				for peer in self.removed_peers:
 					print(f"d_{peer.return_idx().split('_')[-1]} - {peer.return_role()[0]}", end=', ')
 				print()
 			if added_peers:
@@ -640,7 +640,7 @@ class Device:
 				else:
 					# this may happen when a device is put into black list by every worker in a certain comm round
 					pass
-	   
+
 	def update_model_after_chain_resync(self, log_files_folder_path, conn, conn_cursor):
 		# reset global params to the initial weights of the net
 		self.global_parameters = copy.deepcopy(self.initial_net_parameters)
@@ -782,7 +782,7 @@ class Device:
 			self.received_block_from_miner = copy.deepcopy(received_block)
 			print(f"{self.role} {self.idx} has received a new block from {source_miner} mined by {received_block.return_mined_by()}.")
 		else:
-			print(f"Either the block sending miner {source_miner} or the miner {eceived_block.return_mined_by()} mined this block is in worker {self.idx}'s black list. Block is not accepted.")
+			print(f"Either the block sending miner {source_miner} or the miner {received_block.return_mined_by()} mined this block is in worker {self.idx}'s black list. Block is not accepted.")
 			
 
 	def toss_received_block(self):
@@ -928,8 +928,8 @@ class Device:
 					verification_time = (time.time() - verification_time)/self.computation_power
 					return verification_time, True
 				else:
-					 print(f"Signature invalid. Transaction from validator {transaction_validator_idx} is NOT verified.")
-					 return (time.time() - verification_time)/self.computation_power, False
+					print(f"Signature invalid. Transaction from validator {transaction_validator_idx} is NOT verified.")
+					return (time.time() - verification_time)/self.computation_power, False
 			else:
 				print(f"Signature of transaction from validator {transaction_validator_idx} is verified by {self.role} {self.idx}!")
 				verification_time = (time.time() - verification_time)/self.computation_power
@@ -1277,9 +1277,9 @@ class Device:
 					print(f"Signature of transaction from worker {worker_transaction_device_idx} is verified by validator {self.idx}!")
 					transaction_to_validate['worker_signature_valid'] = True
 				else:
-					 print(f"Signature invalid. Transaction from worker {worker_transaction_device_idx} does NOT pass verification.")
-					 # will also add sig not verified transaction due to the validator's verification effort and its rewards needs to be recorded in the block
-					 transaction_to_validate['worker_signature_valid'] = False
+					print(f"Signature invalid. Transaction from worker {worker_transaction_device_idx} does NOT pass verification.")
+					# will also add sig not verified transaction due to the validator's verification effort and its rewards needs to be recorded in the block
+					transaction_to_validate['worker_signature_valid'] = False
 			else:
 				print(f"Signature of transaction from worker {worker_transaction_device_idx} is verified by validator {self.idx}!")
 				transaction_to_validate['worker_signature_valid'] = True
@@ -1392,7 +1392,7 @@ class DevicesInNetwork(object):
 		else:
 			test_data = mnist_dataset.test_data
 			test_label = mnist_dataset.test_label
-			 # shard test
+			# shard test
 			shard_size_test = mnist_dataset.test_data_size // self.num_devices // 2
 			shards_id_test = np.random.permutation(mnist_dataset.test_data_size // shard_size_test)
 		
