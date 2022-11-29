@@ -250,11 +250,13 @@ class Device:
 		# remove itself from the peer_list if there is
 		self.remove_peers(self)
 		# remove malicious peers
+		removed_peers = []
 		potential_malicious_peer_set = set()
 		for peer in self.peer_list:
 			if peer.return_idx() in self.black_list:
 				potential_malicious_peer_set.add(peer)
 		self.remove_peers(potential_malicious_peer_set)
+		removed_peers.extend(potential_malicious_peer_set)
 		# print updated peer result
 		if old_peer_list == self.peer_list:
 			print("Peer list NOT changed.")
@@ -263,7 +265,7 @@ class Device:
 			added_peers = self.peer_list.difference(old_peer_list)
 			if potential_malicious_peer_set:
 				print("These malicious peers are removed")
-				for peer in self.removed_peers:
+				for peer in removed_peers:
 					print(f"d_{peer.return_idx().split('_')[-1]} - {peer.return_role()[0]}", end=', ')
 				print()
 			if added_peers:
