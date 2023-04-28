@@ -37,7 +37,7 @@ $ conda install matplotlib
 
 Sample running command 
 ```
-$ python -nd 20 -max_ncomm 100 -ha 12,5,3 -aio 1 -pow 0 -ko 6 -nm 3 -vh 0.08 -cs 0 -B 10 -mn mnist_cnn -iid 0 -lr 0.01 -dtx 1
+$ python main.py -nd 20 -max_ncomm 100 -ha 12,5,3 -aio 1 -pow 0 -ko 6 -nm 3 -vh 0.08 -cs 0 -B 10 -mn mnist_cnn -iid 0 -lr 0.01 -dtx 1
 ```
 This command corresponds to <i>VBFL_PoS_3/20_vh0.08 in the paper</i>
 
