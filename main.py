@@ -609,6 +609,7 @@ if __name__=="__main__":
 			valid_validator_sig_candidate_transacitons = []
 			invalid_validator_sig_candidate_transacitons = []
 			begin_mining_time = 0
+			new_begin_mining_time = begin_mining_time
 			if final_transactions_arrival_queue:
 				print(f"{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} is verifying received validator transactions...")
 				time_limit = miner.return_miner_acception_wait_time()
@@ -666,11 +667,11 @@ if __name__=="__main__":
 								transaction_to_sign = invalid_validator_sig_candidate_transaciton
 							# (re)sign this candidate transaction
 							signing_time = miner.sign_candidate_transaction(transaction_to_sign)
-							new_begining_mining_time = arrival_time + verification_time + signing_time
+							new_begin_mining_time = arrival_time + verification_time + signing_time
 					else:
 						print(f"A verification process is skipped for the transaction from validator {unconfirmmed_transaction['validation_done_by']} by miner {miner.return_idx()} due to miner offline.")
-						new_begining_mining_time = arrival_time
-					begin_mining_time = new_begining_mining_time if new_begining_mining_time > begin_mining_time else begin_mining_time
+						new_begin_mining_time = arrival_time
+					begin_mining_time = new_begin_mining_time if new_begin_mining_time > begin_mining_time else begin_mining_time
 				transactions_to_record_in_block = {}
 				transactions_to_record_in_block['valid_validator_sig_transacitons'] = valid_validator_sig_candidate_transacitons
 				transactions_to_record_in_block['invalid_validator_sig_transacitons'] = invalid_validator_sig_candidate_transacitons
