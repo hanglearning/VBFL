@@ -687,7 +687,7 @@ if __name__=="__main__":
 					print(f"{miner.return_idx()} - miner mines a block in INFINITE time...")
 					continue
 				recorded_transactions = candidate_block.return_transactions()
-				if recorded_transactions['valid_validator_sig_transacitons'] or recorded_transactions['valid_validator_sig_transacitons']:
+				if recorded_transactions['valid_validator_sig_transacitons'] or recorded_transactions['invalid_validator_sig_transacitons']:
 					print(f"{miner.return_idx()} - miner {miner_iter+1}/{len(miners_this_round)} mining the block...")
 					# return the last block and add previous hash
 					last_block = miner.return_blockchain_object().return_last_block()
@@ -813,10 +813,10 @@ if __name__=="__main__":
 
 		print(''' Logging Accuracies by Devices ''')
 		for device in devices_list:
-			accuracy_this_round = device.validate_model_weights()
+			device.accuracy_this_round = device.validate_model_weights()
 			with open(f"{log_files_folder_path_comm_round}/accuracy_comm_{comm_round}.txt", "a") as file:
 				is_malicious_node = "M" if device.return_is_malicious() else "B"
-				file.write(f"{device.return_idx()} {device.return_role()} {is_malicious_node}: {accuracy_this_round}\n")
+				file.write(f"{device.return_idx()} {device.return_role()} {is_malicious_node}: {device.accuracy_this_round}\n")
 
 		# logging time, mining_consensus and forking
 		# get the slowest device end time
@@ -869,7 +869,7 @@ if __name__=="__main__":
 
 		print(''' Logging Stake by Devices ''')
 		for device in devices_list:
-			accuracy_this_round = device.validate_model_weights()
+			device.accuracy_this_round = device.validate_model_weights()
 			with open(f"{log_files_folder_path_comm_round}/stake_comm_{comm_round}.txt", "a") as file:
 				is_malicious_node = "M" if device.return_is_malicious() else "B"
 				file.write(f"{device.return_idx()} {device.return_role()} {is_malicious_node}: {device.return_stake()}\n")
