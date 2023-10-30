@@ -839,7 +839,7 @@ if __name__=="__main__":
 			except:
 				# corner case when all transactions are rejected by miners
 				file.write("slowest_device_round_ends_time: No valid block has been generated this round.\n")
-				with open(f"{log_files_folder_path}/forking_and_no_valid_block_log.txt", 'a') as file2:
+				with open(f"{log_files_folder_path}/forking_and_no_valid_block_log.txt", 'r+') as file2:
 					no_valid_block_msg = f"No valid block in round {comm_round}\n"
 					if file2.readlines()[-1] != no_valid_block_msg:
 						file2.write(no_valid_block_msg)
