@@ -630,10 +630,10 @@ class Device:
         malicious_worker_validation_log_path = f"{log_files_folder_path}/comm_{comm_round}/malicious_worker_validation_log.txt"
         if not os.path.exists(malicious_worker_validation_log_path):
             with open(malicious_worker_validation_log_path, 'w') as file:
-                accuracy = (TP + TN)/ (TP + TN + FP + FN)
-                precision = TP/(TP + FP)
-                recall = TP/(TP + FN)
-                f1 = precision * recall / (precision + recall)
+                accuracy = (TP + TN) / (TP + TN + FP + FN) if (TP + TN) else 0
+                precision = TP / (TP + FP) if TP else 0
+                recall = TP / (TP + FN) if TP else 0
+                f1 = precision * recall / (precision + recall) if precision * recall else 0
                 file.write(f"In comm_{comm_round} of validating workers, TP = {TP}, FP = {FP}, TN = {TN}, FN = {FN}. \
                         \nAccuracy = {accuracy}, Precision = {precision}, Recall = {recall}, F1 Score = {f1}")
         processing_time = (time.time() - processing_time)/self.computation_power
